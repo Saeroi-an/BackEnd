@@ -4,13 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
-venv/
-env/
-ENV/
 
-# Environment
-.env
-.env.local
 
 # Database
 *.db
