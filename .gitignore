@@ -22,3 +22,20 @@ alembic/versions/*.pyc
 # OS
 .DS_Store
 Thumbs.db
+
+# Environment variables
+.env
+.env.local
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Build files
+*.egg-info/
+dist/
+build/
+
+# Test files (선택적)
+test_*.py
