@@ -1,13 +1,11 @@
 # app/api/auth.py
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 import httpx
 from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token
 from app.services.auth_service import get_google_user_info, get_or_create_user
-from app.models.user import UserResponse
-from app.models.user import UserResponse, TokenResponse  # TokenResponse 추가
-from urllib.parse import urlencode
+from app.models.user import UserResponse, TokenResponse
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -19,15 +17,15 @@ async def google_login():
         f"client_id={settings.GOOGLE_CLIENT_ID}&"
         f"redirect_uri={settings.GOOGLE_REDIRECT_URI}&"
         f"response_type=code&"
-        f"scope=openid%20email%20profile"
+        f"scope=openid%20email%20profile&"
+        f"prompt=select_account"
     )
     return RedirectResponse(url=google_auth_url)
 
-@router.get("/google/callback", response_model=TokenResponse)
+@router.get("/google/callback")
 async def google_callback(code: str = Query(...)):
     """Google OAuth 콜백 처리"""
     # 1. Authorization code로 access token 교환
-    # 타임아웃 설정: 30초
     async with httpx.AsyncClient(timeout=30.0) as client:
         token_response = await client.post(
             "https://oauth2.googleapis.com/token",
@@ -56,11 +54,11 @@ async def google_callback(code: str = Query(...)):
     
     # 4. JWT 토큰 생성
     access_token = create_access_token(data={
-    "id": user.id,  # 정수 그대로
-    "email": user.email
+        "id": user.id,
+        "email": user.email
     })
     refresh_token = create_refresh_token(data={
-    "id": user.id
+        "id": user.id
     })
     
     # 5. 응답 반환: 프론트엔드로 리다이렉트 (쿼리 파라미터로 토큰 전달)
