@@ -33,10 +33,15 @@ async def upload_prescription(
     upload_result = await s3_service.upload_prescription(file, user_id)
     
     # AI 서버로 분석 요청
-    ai_analysis = None
+    # ai_analysis = None 
+    
+    # TODO: S3에서 다운로드 → PIL.Image 변환
+    
+    
+    prompt = "这张处方上写了什么？" # 일단 하드코딩 고정 질문
     try:
-        ai_result = await ai_service.analyze_prescription(upload_result['file_url'])
-        # ai_analysis = ai_result.get('prediction')  # Flask에서 반환하는 prediction 필드
+        ai_result = await ai_service.analyze_prescription(upload_result['file_url'], prompt) # TODO: URL 인자변경
+        
     except Exception as e:
         print(f"AI 분석 실패: {str(e)}")
         # AI 분석 실패해도 업로드는 계속 진행
@@ -60,7 +65,7 @@ async def upload_prescription(
                 "id": result.data[0]['id'],
                 "file_url": upload_result['file_url'],
                 "original_filename": upload_result['original_filename'],
-                "ai_analysis": ai_analysis
+                "ai_analysis": ai_result
             }
         }
         
