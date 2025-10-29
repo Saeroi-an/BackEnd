@@ -1,3 +1,4 @@
+from app.services.ai_service import ai_service
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from app.services.s3_service import s3_service
 from supabase import create_client, Client
@@ -31,6 +32,15 @@ async def upload_prescription(
     # S3에 업로드
     upload_result = await s3_service.upload_prescription(file, user_id)
     
+    # AI 서버로 분석 요청
+    ai_analysis = None
+    try:
+        ai_result = await ai_service.analyze_prescription(upload_result['file_url'])
+        # ai_analysis = ai_result.get('prediction')  # Flask에서 반환하는 prediction 필드
+    except Exception as e:
+        print(f"AI 분석 실패: {str(e)}")
+        # AI 분석 실패해도 업로드는 계속 진행
+    
     # Supabase DB에 저장
     try:
         data = {
@@ -38,6 +48,7 @@ async def upload_prescription(
             "file_url": upload_result['file_url'],
             "file_key": upload_result['file_key'],
             "original_filename": upload_result['original_filename'],
+            "ai_analysis": ai_result  # AI 분석 결과 추가 # text
         }
         
         result = supabase.table("prescriptions").insert(data).execute()
@@ -48,7 +59,8 @@ async def upload_prescription(
             "data": {
                 "id": result.data[0]['id'],
                 "file_url": upload_result['file_url'],
-                "original_filename": upload_result['original_filename']
+                "original_filename": upload_result['original_filename'],
+                "ai_analysis": ai_analysis
             }
         }
         
@@ -70,7 +82,9 @@ async def get_prescription(
     
     result = supabase.table("prescriptions").select("*").eq("id", prescription_id).execute()
     
-    if not result.data:
+    # print(f"reult.data:{result.data}")
+
+    if not result.data: 
         raise HTTPException(status_code=404, detail="처방전을 찾을 수 없습니다.")
     
     return {
