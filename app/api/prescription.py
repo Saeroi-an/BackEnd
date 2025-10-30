@@ -2,6 +2,8 @@ from app.services.ai_service import ai_service
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from app.services.s3_service import s3_service
 from supabase import create_client, Client
+from PIL import Image
+from io import BytesIO
 import os
 from typing import Optional
 from app.core.config import settings
@@ -29,31 +31,30 @@ async def upload_prescription(
     - **user_id**: 사용자 ID (옵션)
     """
     
-    # S3에 업로드
+    # 1. 파일을 PIL.Image로 변환
+    contents = await file.read()
+    image = Image.open(BytesIO(contents)).convert("RGB")
+    
+    # 2. S3에 업로드 (파일 포인터를 처음으로 되돌림)
+    await file.seek(0)
     upload_result = await s3_service.upload_prescription(file, user_id)
     
-    # AI 서버로 분석 요청
-    # ai_analysis = None 
-    
-    # TODO: S3에서 다운로드 → PIL.Image 변환
-    
-    
-    prompt = "这张处方上写了什么？" # 일단 하드코딩 고정 질문
+    # 3. AI 서버로 분석 요청
+    prompt = "这张处方上写了什么？"
     try:
-        ai_result = await ai_service.analyze_prescription(upload_result['file_url'], prompt) # TODO: URL 인자변경
-        
+        ai_result = await ai_service.analyze_prescription(image, prompt)
     except Exception as e:
         print(f"AI 분석 실패: {str(e)}")
-        # AI 분석 실패해도 업로드는 계속 진행
+        ai_result = None
     
-    # Supabase DB에 저장
+    # 4. Supabase DB에 저장
     try:
         data = {
             "user_id": user_id,
             "file_url": upload_result['file_url'],
             "file_key": upload_result['file_key'],
             "original_filename": upload_result['original_filename'],
-            "ai_analysis": ai_result  # AI 분석 결과 추가 # text
+            "ai_analysis": ai_result
         }
         
         result = supabase.table("prescriptions").insert(data).execute()
@@ -86,8 +87,6 @@ async def get_prescription(
     """처방전 정보 조회"""
     
     result = supabase.table("prescriptions").select("*").eq("id", prescription_id).execute()
-    
-    # print(f"reult.data:{result.data}")
 
     if not result.data: 
         raise HTTPException(status_code=404, detail="처방전을 찾을 수 없습니다.")
