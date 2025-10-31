@@ -38,4 +38,6 @@ dist/
 build/
 
 # Test files (선택적)
-test_*.py
+test_db.py
+test_db2.py
+test_db3.py
