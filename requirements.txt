@@ -9,16 +9,17 @@ requests==2.32.3
 # AI 모델 추론 관련
 # PyTorch CPU 버전 설치는 별도 명령어 필요:
 # pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cpu
-# torch==2.8.0
-# torchvision==0.23.0
-# transformers==4.56.1
-# safetensors==0.6.2
+torch==2.8.0
+torchvision==0.23.0
+transformers==4.56.1
+safetensors==0.6.2
 # bitsandbytes==0.45.5
-# einops==0.8.1
-# opencv-python==4.11.0.86
-# Pillow==11.3.0
-# accelerate==1.10.1
-# numpy==2.1.2
+einops==0.8.1
+opencv-python==4.11.0.86
+Pillow==11.3.0
+accelerate==1.10.1
+numpy==2.1.2
+>>>>>>> f4226fdfb53e92d58b08af3fcf9fba2f3f24bca7
 
 # Database
 sqlalchemy==2.0.36
