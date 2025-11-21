@@ -1,0 +1,40 @@
+# FastAPI 서버 관련
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-dotenv==1.0.1
+pydantic==2.11.3
+pydantic-settings==2.6.1
+requests==2.32.3
+
+# AI 모델 추론 관련
+# PyTorch CPU 버전 설치는 별도 명령어 필요:
+# pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cpu
+torch==2.8.0
+torchvision==0.23.0
+transformers==4.56.1
+safetensors==0.6.2
+# bitsandbytes==0.45.5
+einops==0.8.1
+opencv-python==4.11.0.86
+Pillow==11.3.0
+accelerate==1.10.1
+numpy==2.1.2
+>>>>>>> f4226fdfb53e92d58b08af3fcf9fba2f3f24bca7
+
+# Database
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+alembic==1.14.0
+supabase==2.22.1
+
+# AWS S3
+boto3==1.35.69
+
+# Utilities
+python-multipart==0.0.17
+httpx==0.28.1
+email-validator==2.1.0
+
+# Security
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0

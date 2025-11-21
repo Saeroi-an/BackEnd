@@ -1,9 +1,15 @@
+import os
+#가상환경 내부에 캐시 저장
+os.environ['HF_HOME'] = 'D:/Backend/venv/hf_cache'
+os.environ['TRANSFORMERS_CACHE'] = 'D:/Backend/venv/hf_cache'
+os.environ['HF_HUB_CACHE'] = 'D:/Backend/venv/hf_cache'
+
 import torch
 import requests
 from PIL import Image
 from io import BytesIO
 from transformers import AutoTokenizer, AutoProcessor
-from transformers import Qwen2_5_VLForConditionalGeneration  # 모델 클래스
+from transformers import Qwen2VLForConditionalGeneration  # 모델 클래스
 from qwen_vl_utils import process_vision_info
 
 class QwenModel:
@@ -20,7 +26,7 @@ class QwenModel:
 
         print("모델 로드 중...")
         # 1️⃣ 모델 로드
-        self.model = Qwen2_VLForConditionalGeneration.from_pretrained(
+        self.model = Qwen2VLForConditionalGeneration.from_pretrained(
             model_name,
             torch_dtype=torch.float16 if device=="cuda" else torch.float32,
             device_map="auto" if device=="cuda" else None

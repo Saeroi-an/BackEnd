@@ -62,8 +62,17 @@ async def google_callback(code: str = Query(...)):
     })
     
     # 5. 응답 반환: 프론트엔드로 리다이렉트 (쿼리 파라미터로 토큰 전달)
-    from urllib.parse import urlencode 
+    from urllib.parse import urlencode, quote
     from fastapi.responses import RedirectResponse
+
+    # ⭐ 사용자 정보도 함께 전달
+    params = {
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'user_id': str(user.id),
+        'user_name': user.name,
+        'user_email': user.email
+    }
 
     redirect_url = f"{settings.FRONTEND_URL}?access_token={access_token}&refresh_token={refresh_token}"
     return RedirectResponse(url=redirect_url)
