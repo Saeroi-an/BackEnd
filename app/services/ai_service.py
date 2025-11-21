@@ -11,8 +11,6 @@ hf_token = os.getenv("HUGGINGFACE_TOKEN")
 
 class AIService:
     def __init__(self):
-        # temptext="백엔드 끔. 임시"
-        
         # 모델 인스턴스 한 번만 생성
         self.qwen_model = QwenModel()
 
@@ -46,7 +44,6 @@ class AIService:
         except Exception as e:
             raise Exception(f"AI 분석 중 오류 발생: {str(e)}")
     
-        return temptext
 
 # 싱글톤 인스턴스
 ai_service = AIService()

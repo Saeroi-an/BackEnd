@@ -17,6 +17,7 @@ class UserInDB(UserBase):
     """DB에 저장된 사용자 정보"""
     id: int
     google_id: str
+    nickname: Optional[str] = None  # 닉네임 추가
     created_at: datetime
     updated_at: datetime
     
@@ -25,6 +26,7 @@ class UserInDB(UserBase):
 
 class UserProfileUpdate(BaseModel):
     """사용자 기본정보 업데이트 요청"""
+    nickname: Optional[str] = Field(None, min_length=1, max_length=50)  # 닉네임 추가
     gender: Optional[str] = Field(None, pattern="^(male|female|other)$")
     birth_year: Optional[int] = Field(None, ge=1900, le=2024)
     birth_month: Optional[int] = Field(None, ge=1, le=12)
@@ -37,6 +39,7 @@ class UserResponse(BaseModel):
     id: int
     email: str
     name: Optional[str] = None
+    nickname: Optional[str] = None  # 닉네임 추가
     picture: Optional[str] = None
     gender: Optional[str] = None
     birth_year: Optional[int] = None
