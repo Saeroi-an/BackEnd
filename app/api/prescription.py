@@ -39,34 +39,46 @@ async def upload_prescription(
     await file.seek(0)
     upload_result = await s3_service.upload_prescription(file, user_id)
     
-    # 3. AI 서버로 분석 요청
-    prompt = "这张处方上写了什么？"
-    try:
-        ai_result = await ai_service.analyze_prescription(image, prompt)
-    except Exception as e:
-        print(f"AI 분석 실패: {str(e)}")
-        ai_result = None
-    
-    # 4. Supabase DB에 저장
+    # 3. Supabase DB에 일단 저장 (analysis_status: pending)
     try:
         data = {
             "user_id": user_id,
             "file_url": upload_result['file_url'],
             "file_key": upload_result['file_key'],
             "original_filename": upload_result['original_filename'],
-            "ai_analysis": ai_result
+            "analysis_status": "pending"
         }
         
         result = supabase.table("prescriptions").insert(data).execute()
+        prescription_id = result.data[0]['id']
+        
+        # 4. AI 서버로 분석 요청 (백그라운드에서)
+        prompt = "这张处方上写了什么？"
+        try:
+            ai_result = await ai_service.analyze_prescription(image, prompt)
+            
+            # 5. 분석 성공 시 DB 업데이트
+            supabase.table("prescriptions").update({
+                "ai_analysis": ai_result,
+                "analysis_status": "completed"
+            }).eq("id", prescription_id).execute()
+            
+        except Exception as e:
+            print(f"AI 분석 실패: {str(e)}")
+            # 분석 실패 시 상태 업데이트
+            supabase.table("prescriptions").update({
+                "analysis_status": "failed"
+            }).eq("id", prescription_id).execute()
         
         return {
             "success": True,
             "message": "처방전이 성공적으로 업로드되었습니다.",
             "data": {
-                "id": result.data[0]['id'],
+                "id": prescription_id,  # ← 이미 있음
+                "prescription_id": prescription_id,  # ← 명시적으로 추가
                 "file_url": upload_result['file_url'],
                 "original_filename": upload_result['original_filename'],
-                "ai_analysis": ai_result
+                "analysis_status": "pending"
             }
         }
         
@@ -168,4 +180,31 @@ async def get_presigned_url(
         "success": True,
         "presigned_url": presigned_url,
         "expires_in": expiration
+    }
+
+@router.get("/{prescription_id}/analysis")
+async def get_prescription_analysis(
+    prescription_id: int,
+    supabase: Client = Depends(get_supabase)
+):
+    """처방전 분석 결과 조회"""
+    
+    result = supabase.table("prescriptions").select(
+        "id, ai_analysis, analysis_status, created_at, original_filename"
+    ).eq("id", prescription_id).execute()
+    
+    if not result.data:
+        raise HTTPException(status_code=404, detail="처방전을 찾을 수 없습니다.")
+    
+    prescription = result.data[0]
+    
+    return {
+        "success": True,
+        "data": {
+            "prescription_id": prescription['id'],
+            "analysis_status": prescription['analysis_status'],
+            "ai_analysis": prescription['ai_analysis'],
+            "original_filename": prescription['original_filename'],
+            "created_at": prescription['created_at']
+        }
     }

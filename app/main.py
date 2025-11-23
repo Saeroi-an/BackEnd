@@ -7,6 +7,7 @@ from app.api import prescription
 from app.api.auth import router as auth_router
 from app.api.users import router as users_router  # users.py 파일
 from app.api.hospitals import router as hospitals_router
+from app.api import chat
 
 app = FastAPI(title="병원 진료 도우미 API")
 
@@ -45,3 +46,4 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(hospitals_router)
 app.include_router(prescription.router)
+app.include_router(chat.router)
