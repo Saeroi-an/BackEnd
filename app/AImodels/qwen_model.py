@@ -1,8 +1,8 @@
 import os
 #가상환경 내부에 캐시 저장
-os.environ['HF_HOME'] = 'D:/Backend/venv/hf_cache'
-os.environ['TRANSFORMERS_CACHE'] = 'D:/Backend/venv/hf_cache'
-os.environ['HF_HUB_CACHE'] = 'D:/Backend/venv/hf_cache'
+os.environ['HF_HOME'] = '/home/ubuntu/BackEnd/hf_cache'
+os.environ['TRANSFORMERS_CACHE'] = '/home/ubuntu/BackEnd/hf_cache'
+os.environ['HF_HUB_CACHE'] = 'home/ubuntu/Backend/hf_cache'
 
 import torch
 import requests
@@ -25,11 +25,11 @@ class QwenModel:
         print(f"디바이스 종류: {self.device}")
 
         print("모델 로드 중...")
-        # 1️⃣ 모델 로드
+        # 1️⃣ 모델 로드 수정
         self.model = Qwen2VLForConditionalGeneration.from_pretrained(
             model_name,
-            torch_dtype=torch.float16 if device=="cuda" else torch.float32,
-            device_map="auto" if device=="cuda" else None
+            torch_dtype=torch.float16 if self.device=="cuda" else torch.float32,
+            device_map="auto" if self.device=="cuda" else None
         )
         self.model.eval()
         print("모델 로드 완료!")
