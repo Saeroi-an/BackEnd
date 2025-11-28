@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     AI_SERVER_URL: str = "http://localhost:8001"
+
+    # 식약처 의약품 API
+    DRUG_API_SERVICE_KEY: str
+    DRUG_API_BASE_URL: str = "http://apis.data.go.kr/1471000/DrbEasyDrugInfoService/getDrbEasyDrugList"
     
     class Config:
         env_file = ".env"
