@@ -95,3 +95,47 @@ async def get_messages(
         "success": True,
         "messages": result.data
     }
+
+# ============================================================================
+# 약물 정보 일반 채팅 (LangChain Agent 사용)
+# ============================================================================
+from app.services.chat_service import process_chat_query, clear_session
+
+class GeneralChatRequest(BaseModel):
+    session_id: str  # 세션 ID
+    query: str       # 사용자 질문
+
+class GeneralChatResponse(BaseModel):
+    session_id: str
+    response: str
+
+@router.post("/general", response_model=GeneralChatResponse)
+async def general_chat(chat_request: GeneralChatRequest):
+    """약물 정보 등에 대한 일반 채팅 (LangChain Agent 사용)"""
+    try:
+        if not chat_request.session_id or not chat_request.query:
+            raise HTTPException(status_code=400, detail="session_id와 query는 필수입니다.")
+        
+        # Agent를 통한 응답 생성
+        ai_response = process_chat_query(
+            session_id=chat_request.session_id,
+            query=chat_request.query
+        )
+        
+        return GeneralChatResponse(
+            session_id=chat_request.session_id,
+            response=ai_response
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/session/{session_id}")
+async def delete_chat_session(session_id: str):
+    """채팅 세션 삭제"""
+    success = clear_session(session_id)
+    
+    return {
+        "success": success,
+        "message": f"Session {session_id} {'cleared' if success else 'not found'}"
+    }
