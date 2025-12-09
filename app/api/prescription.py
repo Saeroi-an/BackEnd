@@ -1,3 +1,4 @@
+# app/api/prescription.py
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -10,6 +11,7 @@ from io import BytesIO
 import os
 import logging  # 추가
 from app.core.config import settings
+from app.core.security import get_current_user # 추가
 
 router = APIRouter(prefix="/prescriptions", tags=["prescriptions"])
 logger = logging.getLogger(__name__)  # 추가
@@ -20,7 +22,7 @@ def get_supabase() -> Client:
 
 # Response 모델 추가
 class ChatResponse(BaseModel):
-    user_id: str
+    user_id: int # str -> int로 변경 
     prescription_id: Optional[int] = None
     user_message: str
     ai_response: str
@@ -29,7 +31,7 @@ class ChatResponse(BaseModel):
 
 @router.post("/upload", response_model=ChatResponse)
 async def upload_prescription(
-    user_id: str = Form(...),
+    current_user: dict = Depends(get_current_user),
     query: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     supabase: Client = Depends(get_supabase)
@@ -42,6 +44,8 @@ async def upload_prescription(
     2) 이미지 + 텍스트 전송
     3) 이미지만 전송 (기본 프롬프트 사용)
     """
+    # JWT 토큰에서 user_id 자동 추출 👈 변경
+    user_id = current_user["id"]
     
     prescription_id = None
     prescription_analysis = None
@@ -124,7 +128,7 @@ async def upload_prescription(
     try:
         save_message_to_db(
             supabase=supabase,
-            user_id=user_id,
+            user_id=str(user_id), # str() 추가 (chat_service에서 str 요구하면)
             prescription_id=prescription_id,
             message=user_message,
             sender_type="user"
@@ -136,7 +140,7 @@ async def upload_prescription(
     try:
         ai_response = process_chat_with_db(
             supabase=supabase,
-            user_id=user_id,
+            user_id=str(user_id),  # 👈 str() 추가
             user_query=user_message,
             prescription_analysis=prescription_analysis
         )
@@ -151,7 +155,7 @@ async def upload_prescription(
     try:
         save_message_to_db(
             supabase=supabase,
-            user_id=user_id,
+            user_id=str(user_id),  # str() 추가
             prescription_id=prescription_id,
             message=ai_response,
             sender_type="ai"
@@ -172,6 +176,7 @@ async def upload_prescription(
 @router.get("/{prescription_id}")
 async def get_prescription(
     prescription_id: int,
+    current_user: dict = Depends(get_current_user),  # 추가 (권한 체크용)
     supabase: Client = Depends(get_supabase)
 ):
     """처방전 정보 조회"""
