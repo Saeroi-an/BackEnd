@@ -40,7 +40,8 @@ def initialize_global_agent():
         huggingfacehub = HuggingFaceHub(
             repo_id=REPO_ID,
             huggingfacehub_api_token=HUGGINGFACE_TOKEN,  # 👈 변수명 수정
-            model_kwargs={"temperature": 0.2, "max_length": 500}
+            model_kwargs={"temperature": 0.2, "max_length": 500},
+            task="text2text-generation"
         )
         
         # Tool 리스트 초기화
