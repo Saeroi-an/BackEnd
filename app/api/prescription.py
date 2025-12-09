@@ -74,6 +74,8 @@ async def upload_prescription(
             }
             
             result = supabase.table("prescriptions").insert(data).execute()
+            logger.info(f"result 형태태태태태탵태태: {result}")
+
             prescription_id = result.data[0]['id']
             
             # 1-4. VL 모델로 처방전 분석
