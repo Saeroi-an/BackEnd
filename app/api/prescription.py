@@ -81,7 +81,8 @@ async def upload_prescription(
             # 1-4. VL 모델로 처방전 분석
             # 이미지만 전송한 경우 기본 프롬프트 사용
             if not query or query.strip() == "":
-                user_message = "这张处方上写了什么？"
+                # user_message = "这张处方上写了什么？"
+                user_message = "请把这张收据翻译成韩语。"
                 logger.info("📝 Using default prompt (image only)")
             
             vl_prompt = user_message
