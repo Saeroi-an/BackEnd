@@ -26,7 +26,7 @@ class ChatResponse(BaseModel):
     prescription_id: Optional[int] = None
     user_message: str
     ai_response: str
-    prescription_analysis: Optional[str] = None  # 👈 dict → str
+    prescription_analysis: Optional[str] = None
 
 @router.post("/upload", response_model=ChatResponse)
 async def upload_prescription(
@@ -35,9 +35,7 @@ async def upload_prescription(
     file: Optional[UploadFile] = File(None),
     supabase: Client = Depends(get_supabase)
 ):
-    """
-    통합 엔드포인트: 이미지 업로드 + 채팅
-    """
+    """통합 엔드포인트: 이미지 업로드 + 채팅"""
     user_id = current_user["id"]
     prescription_id = None
     user_message = query
@@ -118,10 +116,8 @@ async def upload_prescription(
     except Exception as e:
         logger.error(f"사용자 메시지 저장 실패: {e}")
     
-    # 공통: Agent 실행 (분석 결과 포함)
-    # ver2 공통: Agent 실행 부분 → VL 결과만 사용으로 변경
+    # 공통: VL 결과만 사용 (Agent 우회)
     try:
-        # VL 분석 결과만 사용 (Agent 우회)
         if prescription_analysis_result:
             # CUDA 에러 또는 다른 에러 체크
             if "CUDA out of memory" in prescription_analysis_result or prescription_analysis_result.startswith("Error:"):
@@ -141,7 +137,7 @@ async def upload_prescription(
                 ai_response = prescription_analysis_result
                 logger.info(f"✅ VL analysis used as final response")
         else:
-            # 텍스트만 있는 경우 - 간단한 응답
+            # 텍스트만 있는 경우
             ai_response = "처방전 이미지 분석이 필요합니다. 먼저 처방전 사진을 업로드해주세요."
             logger.info(f"💬 Text-only response")
         
@@ -154,26 +150,6 @@ async def upload_prescription(
         
         # 에러 시 분석 결과라도 반환
         if prescription_analysis_result and not prescription_analysis_result.startswith("Error:"):
-            ai_response = prescription_analysis_result
-        else:
-            ai_response = "죄송합니다. 응답 생성 중 오류가 발생했습니다."
-        
-        # 에러 발생 시 prescription 상태 업데이트
-        if prescription_id:
-            try:
-                supabase.table("prescriptions").update({
-                    "analysis_status": "failed"
-                }).eq("id", prescription_id).execute()
-            except:
-                pass
-        
-    except Exception as e:
-        logger.error(f"❌ LangChain agent failed: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        # 에러 시 분석 결과라도 반환
-        if prescription_analysis_result:
             ai_response = prescription_analysis_result
         else:
             ai_response = "죄송합니다. 응답 생성 중 오류가 발생했습니다."
