@@ -11,7 +11,6 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-
 class S3Service:
     def __init__(self):
         self.s3_client = boto3.client(
@@ -113,6 +112,38 @@ class S3Service:
                 detail=f"파일 업로드 중 오류가 발생했습니다: {str(e)}"
             )
     
+    def download_prescription(self, file_key: str) -> Optional[bytes]:
+        """
+        S3에서 처방전 이미지 다운로드
+        
+        Args:
+            file_key: S3 객체 키
+            
+        Returns:
+            bytes: 이미지 바이너리 데이터 (실패 시 None)
+        """
+        try:
+            logger.info(f"📥 S3에서 다운로드 시도: {file_key}")
+            
+            response = self.s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=file_key
+            )
+            
+            image_bytes = response['Body'].read()
+            
+            logger.info(f"✅ S3 다운로드 성공: {file_key} ({len(image_bytes)} bytes)")
+            
+            return image_bytes
+            
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            logger.error(f"❌ S3 다운로드 실패 ({error_code}): {file_key}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ 예상치 못한 다운로드 오류: {str(e)}")
+            return None
+    
     def delete_prescription(self, file_key: str) -> bool:
         """
         S3에서 처방전 이미지 삭제
@@ -164,7 +195,6 @@ class S3Service:
         except ClientError as e:
             logger.error(f"Presigned URL 생성 실패: {str(e)}")
             return None
-
 
 # 싱글톤 인스턴스
 s3_service = S3Service()

@@ -13,10 +13,10 @@ class AIService:
     def __init__(self):
         # 모델 인스턴스 한 번만 생성
         self.qwen_model = QwenModel()
-
+    
     async def analyze_prescription(self, image: Image.Image, prompt: Optional[str] = None) -> str:
         """
-        처방전 이미지 분석
+        처방전 이미지 분석 (비동기)
         
         Args:
             image: PIL.Image 객체
@@ -44,6 +44,35 @@ class AIService:
         except Exception as e:
             raise Exception(f"AI 분석 중 오류 발생: {str(e)}")
     
+    def analyze_prescription_sync(self, image: Image.Image, prompt: Optional[str] = None) -> str:
+        """
+        처방전 이미지 분석 (동기) - Tool에서 사용
+        
+        Args:
+            image: PIL.Image 객체
+            prompt: 분석 프롬프트 (기본값: 중국어 질문)
+        
+        Returns:
+            str: 모델 예측 텍스트
+        """
+        if prompt is None:
+            prompt = "这张处方上写了什么？"
+        
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},
+                    {"type": "text", "text": f"<image>\n{prompt}"} 
+                ]
+            }
+        ]
+        
+        try:
+            output_text_list = self.qwen_model.predict(messages)
+            return output_text_list[0] if output_text_list else ""
+        except Exception as e:
+            raise Exception(f"AI 분석 중 오류 발생: {str(e)}")
 
 # 싱글톤 인스턴스
 ai_service = AIService()

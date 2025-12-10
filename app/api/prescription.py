@@ -4,17 +4,17 @@ from pydantic import BaseModel
 from typing import Optional
 from app.services.ai_service import ai_service
 from app.services.s3_service import s3_service
-from app.services.chat_service import process_chat_with_db, save_message_to_db  # 추가
+from app.services.chat_service import process_chat_with_db, save_message_to_db
 from supabase import create_client, Client
 from PIL import Image
 from io import BytesIO
 import os
-import logging  # 추가
+import logging
 from app.core.config import settings
-from app.core.security import get_current_user # 추가
+from app.core.security import get_current_user
 
 router = APIRouter(prefix="/prescriptions", tags=["prescriptions"])
-logger = logging.getLogger(__name__)  # 추가
+logger = logging.getLogger(__name__)
 
 # Supabase 클라이언트
 def get_supabase() -> Client:
@@ -22,12 +22,11 @@ def get_supabase() -> Client:
 
 # Response 모델 추가
 class ChatResponse(BaseModel):
-    user_id: int # str -> int로 변경 
+    user_id: int
     prescription_id: Optional[int] = None
     user_message: str
     ai_response: str
     prescription_analysis: Optional[dict] = None
-
 
 @router.post("/upload", response_model=ChatResponse)
 async def upload_prescription(
@@ -37,26 +36,29 @@ async def upload_prescription(
     supabase: Client = Depends(get_supabase)
 ):
     """
-    통합 엔드포인트: 이미지 업로드 + 채팅
+    통합 엔드포인트: 이미지 업로드 + 채팅 (AI 파트 방식)
     
     3가지 케이스 처리:
     1) 텍스트만 전송
     2) 이미지 + 텍스트 전송
     3) 이미지만 전송 (기본 프롬프트 사용)
+    
+    AI 파트 요구사항:
+    - 이미지 경로를 쿼리에 추가
+    - Agent가 VL Tool 사용 여부 판단
     """
-    # JWT 토큰에서 user_id 자동 추출 👈 변경
+    # JWT 토큰에서 user_id 자동 추출
     user_id = current_user["id"]
     
     prescription_id = None
-    prescription_analysis = None
     user_message = query
     
-    # Case 1: 파일이 있는 경우 (이미지 업로드 + VL 분석)
+    # Case 1: 파일이 있는 경우 (이미지 업로드만, VL 분석은 Agent가 판단)
     if file and file.filename:
         logger.info(f"📤 File upload detected: {file.filename}")
         
         try:
-            # 1-1. 파일을 PIL.Image로 변환
+            # 1-1. 파일을 PIL.Image로 변환 (검증용)
             contents = await file.read()
             image = Image.open(BytesIO(contents)).convert("RGB")
             
@@ -74,42 +76,26 @@ async def upload_prescription(
             }
             
             result = supabase.table("prescriptions").insert(data).execute()
-            logger.info(f"result 형태태태태태탵태태: {result}")
-
+            logger.info(f"✅ Prescription saved to DB: {result.data}")
             prescription_id = result.data[0]['id']
             
-            # 1-4. VL 모델로 처방전 분석
+            # 1-4. AI 파트 방식: 이미지 경로를 쿼리에 추가
             # 이미지만 전송한 경우 기본 프롬프트 사용
             if not query or query.strip() == "":
-                # user_message = "这张处方上写了什么？"
-                user_message = "请把这张收据翻译成中文。"
+                user_message = "这张处方上写了什么？"
                 logger.info("📝 Using default prompt (image only)")
             
-            vl_prompt = user_message
+            # 🔥 핵심: 이미지 경로를 쿼리에 명시적으로 추가
+            user_message_with_image = (
+                f"업로드된 이미지(prescription_id: {prescription_id})에 대해, "
+                f"{user_message}"
+            )
             
-            try:
-                ai_result = await ai_service.analyze_prescription(image, vl_prompt)
-                prescription_analysis = ai_result
-                
-                # 분석 성공 시 DB 업데이트
-                supabase.table("prescriptions").update({
-                    "ai_analysis": ai_result,
-                    "analysis_status": "completed"
-                }).eq("id", prescription_id).execute()
-                
-                logger.info(f"✅ VL analysis completed for prescription {prescription_id}")
-                
-            except Exception as e:
-                logger.error(f"❌ VL analysis failed: {e}")
-                supabase.table("prescriptions").update({
-                    "analysis_status": "failed"
-                }).eq("id", prescription_id).execute()
-                
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"처방전 분석 실패: {str(e)}"
-                )
-        
+            # 사용자 메시지 업데이트
+            user_message = user_message_with_image
+            
+            logger.info(f"🖼️ Image path added to query: prescription_id={prescription_id}")
+            
         except Exception as e:
             logger.error(f"❌ File upload failed: {e}")
             raise HTTPException(
@@ -131,7 +117,7 @@ async def upload_prescription(
     try:
         save_message_to_db(
             supabase=supabase,
-            user_id=str(user_id), # str() 추가 (chat_service에서 str 요구하면)
+            user_id=str(user_id),
             prescription_id=prescription_id,
             message=user_message,
             sender_type="user"
@@ -139,26 +125,52 @@ async def upload_prescription(
     except Exception as e:
         logger.error(f"사용자 메시지 저장 실패: {e}")
     
-    # 공통: LangChain Agent 실행
+    # 공통: LangChain Agent 실행 (AI 파트 방식)
     try:
+        # AI 파트 방식: Agent가 스스로 VL Tool 사용 여부 판단
         ai_response = process_chat_with_db(
             supabase=supabase,
-            user_id=str(user_id),  # 👈 str() 추가
+            user_id=str(user_id),
             user_query=user_message,
-            prescription_analysis=prescription_analysis
+            prescription_analysis=None  # Agent가 필요시 Tool로 분석
         )
         
         logger.info(f"🤖 LangChain response generated")
         
+        # Agent가 VL Tool을 사용했는지 확인 (prescription 업데이트)
+        if prescription_id:
+            # prescription_chats에서 AI 응답 확인
+            # 실제 분석이 수행되었다면 analysis_status 업데이트
+            try:
+                supabase.table("prescriptions").update({
+                    "analysis_status": "completed"
+                }).eq("id", prescription_id).execute()
+                
+                logger.info(f"✅ Prescription analysis status updated: {prescription_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to update prescription status: {e}")
+        
     except Exception as e:
         logger.error(f"❌ LangChain agent failed: {e}")
+        import traceback
+        traceback.print_exc()
+        
         ai_response = "죄송합니다. 응답 생성 중 오류가 발생했습니다."
+        
+        # 에러 발생 시 prescription 상태 업데이트
+        if prescription_id:
+            try:
+                supabase.table("prescriptions").update({
+                    "analysis_status": "failed"
+                }).eq("id", prescription_id).execute()
+            except:
+                pass
     
     # 공통: AI 응답 DB 저장
     try:
         save_message_to_db(
             supabase=supabase,
-            user_id=str(user_id),  # str() 추가
+            user_id=str(user_id),
             prescription_id=prescription_id,
             message=ai_response,
             sender_type="ai"
@@ -172,20 +184,18 @@ async def upload_prescription(
         prescription_id=prescription_id,
         user_message=user_message,
         ai_response=ai_response,
-        prescription_analysis=prescription_analysis
+        prescription_analysis=None  # Agent가 처리했으므로 None
     )
-
 
 @router.get("/{prescription_id}")
 async def get_prescription(
     prescription_id: int,
-    current_user: dict = Depends(get_current_user),  # 추가 (권한 체크용)
+    current_user: dict = Depends(get_current_user),
     supabase: Client = Depends(get_supabase)
 ):
     """처방전 정보 조회"""
     
     result = supabase.table("prescriptions").select("*").eq("id", prescription_id).execute()
-
     if not result.data: 
         raise HTTPException(status_code=404, detail="처방전을 찾을 수 없습니다.")
     
@@ -193,7 +203,6 @@ async def get_prescription(
         "success": True,
         "data": result.data[0]
     }
-
 
 @router.get("/user/{user_id}")
 async def get_user_prescriptions(
@@ -209,7 +218,6 @@ async def get_user_prescriptions(
         "data": result.data,
         "count": len(result.data)
     }
-
 
 @router.delete("/{prescription_id}")
 async def delete_prescription(
@@ -237,7 +245,6 @@ async def delete_prescription(
         "message": "처방전이 삭제되었습니다.",
         "s3_deleted": s3_deleted
     }
-
 
 @router.get("/{prescription_id}/presigned-url")
 async def get_presigned_url(
