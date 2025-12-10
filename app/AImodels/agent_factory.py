@@ -1,13 +1,9 @@
 # app/AImodels/agent_factory.py
-"""
-Agent Factory Module
-LLM과 Tool을 전역으로 초기화하고, 세션별 Agent Executor를 생성합니다.
-"""
-from langchain_community.llms import HuggingFaceEndpoint
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
+from langchain_community.llms import HuggingFacePipeline
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.memory import ConversationBufferMemory
-from langchain_core.language_models.llms import LLM
-from langchain import hub
+import torch
 import os
 import logging
 
@@ -16,10 +12,8 @@ from app.AImodels.tools import ALL_TOOLS
 logger = logging.getLogger(__name__)
 
 # 환경 변수 설정
-HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN', '')
 REPO_ID = os.getenv('LLM_REPO_ID', 'google/flan-t5-large')
 
-logger.info(f"🔍 HUGGINGFACE_TOKEN 길이: {len(HUGGINGFACE_TOKEN) if HUGGINGFACE_TOKEN else 0}")
 logger.info(f"🔍 LLM_REPO_ID: {REPO_ID}")
 
 # 전역 변수
@@ -28,47 +22,43 @@ initial_agent = None
 GLOBAL_TOOLS = ALL_TOOLS
 
 
-class NonStreamingLLM(LLM):
-    """Streaming을 비활성화한 LLM 래퍼"""
-    
-    llm: HuggingFaceEndpoint
-    
-    @property
-    def _llm_type(self) -> str:
-        return "non_streaming_huggingface"
-    
-    def _call(self, prompt: str, stop=None, **kwargs):
-        """Non-streaming 호출"""
-        return self.llm._call(prompt, stop=stop, **kwargs)
-
-
 def initialize_global_agent():
-    """전역 LLM과 Tool을 초기화"""
+    """전역 LLM과 Tool을 초기화 (로컬 모델)"""
     global huggingfacehub, GLOBAL_TOOLS, initial_agent
     
     try:
-        logger.info("🚀 Initializing Global LLM and Tools...")
+        logger.info("🚀 Initializing Global LLM and Tools (Local Model)...")
         
-        if not HUGGINGFACE_TOKEN:
-            raise ValueError("HUGGINGFACE_TOKEN 환경변수가 설정되지 않았습니다.")
+        # GPU 사용 가능 확인
+        device = 0 if torch.cuda.is_available() else -1
+        logger.info(f"🖥️ Using device: {'GPU' if device == 0 else 'CPU'}")
         
-        # HuggingFace Endpoint LLM 초기화
-        base_llm = HuggingFaceEndpoint(
-            repo_id=REPO_ID,
-            huggingfacehub_api_token=HUGGINGFACE_TOKEN,
-            temperature=0.1,
-            max_new_tokens=512,
-            task="text2text-generation"
+        # 토크나이저와 모델 로드
+        tokenizer = AutoTokenizer.from_pretrained(REPO_ID)
+        model = AutoModelForSeq2SeqLM.from_pretrained(
+            REPO_ID,
+            torch_dtype=torch.float16 if device == 0 else torch.float32,
+            device_map="auto" if device == 0 else None
         )
         
-        # Non-streaming wrapper로 감싸기
-        huggingfacehub = NonStreamingLLM(llm=base_llm)
+        # Pipeline 생성
+        pipe = pipeline(
+            "text2text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            max_new_tokens=512,
+            temperature=0.1,
+            device=device
+        )
+        
+        # LangChain LLM으로 래핑
+        huggingfacehub = HuggingFacePipeline(pipeline=pipe)
         
         logger.info(f"✅ Tools loaded: {[tool.name for tool in GLOBAL_TOOLS]}")
         
         initial_agent = True
         
-        logger.info(f"✅ LLM initialized: {REPO_ID}")
+        logger.info(f"✅ LLM initialized (Local): {REPO_ID}")
         logger.info(f"✅ Total tools: {len(GLOBAL_TOOLS)}")
         
     except Exception as e:
@@ -79,13 +69,12 @@ def initialize_global_agent():
 
 
 def create_agent_executor(memory_instance: ConversationBufferMemory):
-    """세션별 Agent Executor 생성 (새로운 API 사용)"""
+    """세션별 Agent Executor 생성"""
     if not huggingfacehub or not initial_agent:
         raise RuntimeError("LLM이 초기화되지 않았습니다.")
     
     logger.info("🔧 Creating Agent Executor with memory...")
     
-    # ReAct 프롬프트 템플릿
     from langchain.prompts import PromptTemplate
     
     template = """Answer the following questions as best you can. You have access to the following tools:
@@ -110,14 +99,12 @@ Thought:{agent_scratchpad}"""
     
     prompt = PromptTemplate.from_template(template)
     
-    # ReAct Agent 생성
     agent = create_react_agent(
         llm=huggingfacehub,
         tools=GLOBAL_TOOLS,
         prompt=prompt
     )
     
-    # Agent Executor 생성
     agent_executor = AgentExecutor(
         agent=agent,
         tools=GLOBAL_TOOLS,
@@ -132,7 +119,6 @@ Thought:{agent_scratchpad}"""
     return agent_executor
 
 
-# 세션 메모리 캐시
 SESSION_MEMORY_CACHE = {}
 
 def cleanup_old_sessions(max_sessions: int = 1000):
