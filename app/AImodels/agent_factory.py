@@ -6,6 +6,7 @@ LLM과 Tool을 전역으로 초기화하고, 세션별 Agent Executor를 생성�
 from langchain_community.llms import HuggingFaceEndpoint
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.memory import ConversationBufferMemory
+from langchain_core.language_models.llms import LLM
 from langchain import hub
 import os
 import logging
@@ -26,6 +27,21 @@ huggingfacehub = None
 initial_agent = None
 GLOBAL_TOOLS = ALL_TOOLS
 
+
+class NonStreamingLLM(LLM):
+    """Streaming을 비활성화한 LLM 래퍼"""
+    
+    llm: HuggingFaceEndpoint
+    
+    @property
+    def _llm_type(self) -> str:
+        return "non_streaming_huggingface"
+    
+    def _call(self, prompt: str, stop=None, **kwargs):
+        """Non-streaming 호출"""
+        return self.llm._call(prompt, stop=stop, **kwargs)
+
+
 def initialize_global_agent():
     """전역 LLM과 Tool을 초기화"""
     global huggingfacehub, GLOBAL_TOOLS, initial_agent
@@ -37,14 +53,16 @@ def initialize_global_agent():
             raise ValueError("HUGGINGFACE_TOKEN 환경변수가 설정되지 않았습니다.")
         
         # HuggingFace Endpoint LLM 초기화
-        huggingfacehub = HuggingFaceEndpoint(
+        base_llm = HuggingFaceEndpoint(
             repo_id=REPO_ID,
             huggingfacehub_api_token=HUGGINGFACE_TOKEN,
             temperature=0.1,
             max_new_tokens=512,
-            task="text2text-generation",
-            streaming=False
+            task="text2text-generation"
         )
+        
+        # Non-streaming wrapper로 감싸기
+        huggingfacehub = NonStreamingLLM(llm=base_llm)
         
         logger.info(f"✅ Tools loaded: {[tool.name for tool in GLOBAL_TOOLS]}")
         
@@ -58,6 +76,7 @@ def initialize_global_agent():
         huggingfacehub = None
         initial_agent = False
         raise
+
 
 def create_agent_executor(memory_instance: ConversationBufferMemory):
     """세션별 Agent Executor 생성 (새로운 API 사용)"""
@@ -108,9 +127,10 @@ Thought:{agent_scratchpad}"""
         max_iterations=5
     )
     
-    logger.info("✅ Agent Executor created successfully")  # 👈 이 줄 추가!
+    logger.info("✅ Agent Executor created successfully")
     
     return agent_executor
+
 
 # 세션 메모리 캐시
 SESSION_MEMORY_CACHE = {}
