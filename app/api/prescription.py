@@ -119,15 +119,53 @@ async def upload_prescription(
         logger.error(f"사용자 메시지 저장 실패: {e}")
     
     # 공통: Agent 실행 (분석 결과 포함)
+    # ver2 공통: Agent 실행 부분 → VL 결과만 사용으로 변경
     try:
-        ai_response = process_chat_with_db(
-            supabase=supabase,
-            user_id=str(user_id),
-            user_query=user_message,
-            prescription_analysis=prescription_analysis_result
-        )
+        # VL 분석 결과만 사용 (Agent 우회)
+        if prescription_analysis_result:
+            # CUDA 에러 또는 다른 에러 체크
+            if "CUDA out of memory" in prescription_analysis_result or prescription_analysis_result.startswith("Error:"):
+                ai_response = "GPU 메모리 부족으로 분석에 실패했습니다. 잠시 후 다시 시도해주세요."
+                logger.error(f"❌ VL Model error: {prescription_analysis_result[:200]}")
+                
+                # prescription 상태를 failed로 업데이트
+                if prescription_id:
+                    try:
+                        supabase.table("prescriptions").update({
+                            "analysis_status": "failed"
+                        }).eq("id", prescription_id).execute()
+                    except:
+                        pass
+            else:
+                # 정상 분석 결과
+                ai_response = prescription_analysis_result
+                logger.info(f"✅ VL analysis used as final response")
+        else:
+            # 텍스트만 있는 경우 - 간단한 응답
+            ai_response = "처방전 이미지 분석이 필요합니다. 먼저 처방전 사진을 업로드해주세요."
+            logger.info(f"💬 Text-only response")
         
-        logger.info(f"🤖 LangChain response generated")
+        logger.info(f"🤖 Response generated (VL only, Agent bypassed)")
+        
+    except Exception as e:
+        logger.error(f"❌ Response generation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # 에러 시 분석 결과라도 반환
+        if prescription_analysis_result and not prescription_analysis_result.startswith("Error:"):
+            ai_response = prescription_analysis_result
+        else:
+            ai_response = "죄송합니다. 응답 생성 중 오류가 발생했습니다."
+        
+        # 에러 발생 시 prescription 상태 업데이트
+        if prescription_id:
+            try:
+                supabase.table("prescriptions").update({
+                    "analysis_status": "failed"
+                }).eq("id", prescription_id).execute()
+            except:
+                pass
         
     except Exception as e:
         logger.error(f"❌ LangChain agent failed: {e}")
