@@ -97,21 +97,17 @@ Thought:{agent_scratchpad}"""
         prompt=prompt
     )
     
-    # Agent Executor 생성 (output_keys 명시)
+    # Agent Executor 생성
     agent_executor = AgentExecutor(
         agent=agent,
         tools=GLOBAL_TOOLS,
         memory=memory_instance,
         verbose=True,
         handle_parsing_errors=True,
-        max_iterations=5,
-        return_intermediate_steps=False  # 👈 추가
+        max_iterations=5
     )
     
-    # output_keys 명시적 설정
-    agent_executor.output_keys = ["output"]  # 👈 추가
-    
-    logger.info("✅ Agent Executor created successfully")
+    logger.info("✅ Agent Executor created successfully")  # 👈 이 줄 추가!
     
     return agent_executor
 

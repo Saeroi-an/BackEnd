@@ -103,7 +103,9 @@ def process_chat_with_db(
         
         # 4. Agent 실행
         agent = create_agent_executor(memory)
-        ai_response = agent.run(enhanced_query)
+        # ai_response = agent.run(enhanced_query)
+        result = agent.invoke({"input": enhanced_query})
+        ai_response = result.get("output", "응답을 생성할 수 없습니다.")
         
         logger.info(f"🤖 AI response generated")
         
