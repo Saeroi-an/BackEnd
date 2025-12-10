@@ -48,7 +48,7 @@ def initialize_global_agent():
             tokenizer=tokenizer,
             max_new_tokens=512,
             temperature=0.1,
-            device=device
+            # device=device
         )
         
         # LangChain LLM으로 래핑
