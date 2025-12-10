@@ -65,7 +65,7 @@ def create_agent_executor(memory_instance: ConversationBufferMemory):
     
     logger.info("🔧 Creating Agent Executor with memory...")
     
-    # ReAct 프롬프트 템플릿 (간단 버전)
+    # ReAct 프롬프트 템플릿
     from langchain.prompts import PromptTemplate
     
     template = """Answer the following questions as best you can. You have access to the following tools:
@@ -97,15 +97,19 @@ Thought:{agent_scratchpad}"""
         prompt=prompt
     )
     
-    # Agent Executor 생성
+    # Agent Executor 생성 (output_keys 명시)
     agent_executor = AgentExecutor(
         agent=agent,
         tools=GLOBAL_TOOLS,
         memory=memory_instance,
         verbose=True,
         handle_parsing_errors=True,
-        max_iterations=5
+        max_iterations=5,
+        return_intermediate_steps=False  # 👈 추가
     )
+    
+    # output_keys 명시적 설정
+    agent_executor.output_keys = ["output"]  # 👈 추가
     
     logger.info("✅ Agent Executor created successfully")
     
