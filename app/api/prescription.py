@@ -301,3 +301,29 @@ async def get_prescription_analysis(
             "created_at": prescription['created_at']
         }
     }
+
+@router.post("/chat")
+async def chat_with_prescription(
+    request: dict,
+    current_user: dict = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase)
+):
+    """텍스트 채팅 엔드포인트"""
+    user_message = request.get("message", "")
+    user_id = current_user["id"]
+    
+    # Agent 실행
+    ai_response = process_chat_with_db(
+        supabase=supabase,
+        user_id=str(user_id),
+        user_query=user_message,
+        prescription_analysis=None
+    )
+    
+    # 메시지 DB 저장
+    save_message_to_db(supabase, str(user_id), None, user_message, "user")
+    save_message_to_db(supabase, str(user_id), None, ai_response, "ai")
+    
+    return {
+        "ai_response": ai_response
+    }
