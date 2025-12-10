@@ -4,7 +4,7 @@ Agent Factory Module
 LLM과 Tool을 전역으로 초기화하고, 세션별 Agent Executor를 생성합니다.
 AI 파트 요구사항에 맞춰 변수명 통일: huggingfacehub, initial_agent
 """
-from langchain_community.llms import HuggingFaceEndpoint
+from langchain_huggingface import HuggingFaceEndpoint
 from langchain.agents import initialize_agent, AgentType
 from langchain.memory import ConversationBufferMemory
 import os
