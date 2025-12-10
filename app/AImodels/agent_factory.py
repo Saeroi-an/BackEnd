@@ -4,7 +4,7 @@ Agent Factory Module
 LLM과 Tool을 전역으로 초기화하고, 세션별 Agent Executor를 생성합니다.
 AI 파트 요구사항에 맞춰 변수명 통일: huggingfacehub, initial_agent
 """
-from langchain_community.llms import HuggingFaceHub
+from langchain_community.llms import HuggingFaceEndpoint
 from langchain.agents import initialize_agent, AgentType
 from langchain.memory import ConversationBufferMemory
 import os
@@ -46,10 +46,11 @@ def initialize_global_agent():
             raise ValueError("HUGGINGFACE_TOKEN 환경변수가 설정되지 않았습니다.")
         
         # HuggingFace Hub LLM 초기화
-        huggingfacehub = HuggingFaceHub(
+        huggingfacehub = HuggingFaceEndpoint(
             repo_id=REPO_ID,
             huggingfacehub_api_token=HUGGINGFACE_TOKEN,
-            model_kwargs={"temperature": 0.1, "max_length": 512},  # AI 파트 설정값
+            temperature=0.1,
+            max_new_tokens=512,  # max_length → max_new_tokens
             task="text2text-generation"
         )
         
