@@ -42,7 +42,8 @@ def initialize_global_agent():
             huggingfacehub_api_token=HUGGINGFACE_TOKEN,
             temperature=0.1,
             max_new_tokens=512,
-            task="text2text-generation"
+            task="text2text-generation",
+            streaming=False
         )
         
         logger.info(f"✅ Tools loaded: {[tool.name for tool in GLOBAL_TOOLS]}")
