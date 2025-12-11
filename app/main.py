@@ -39,8 +39,6 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Agent 초기화 실패: {e}")
         logger.warning("⚠️  채팅 기능이 제한될 수 있습니다.")
     
-    logger.info("⚠️ Agent 초기화 스킵 (VL 모델만 사용)")
-    
     logger.info("=" * 80)
     logger.info("✅ 서버 시작 완료!")
     logger.info("=" * 80)
