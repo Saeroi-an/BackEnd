@@ -72,8 +72,40 @@ def create_agent_executor(memory_instance: ConversationBufferMemory):
     
     logger.info("🔧 Creating Agent Executor with memory...")
     
-    # LangChain Hub에서 공식 ReAct 프롬프트 가져오기
-    prompt = hub.pull("hwchase17/react")
+    # 커스텀 프롬프트 템플릿
+    from langchain.prompts import PromptTemplate
+    
+    template = """You are a helpful medical assistant. Answer questions based on the tools available and conversation history.
+
+Available tools:
+{tools}
+
+Tool Names: {tool_names}
+
+Guidelines:
+- If the question contains "prescription_id: [number]", use VL_Model_Image_Analyzer with that number as input
+- For drug information questions, use Public_Data_API_Searcher
+- Otherwise, answer based on your knowledge
+
+Use this format:
+Question: the input question
+Thought: think about what to do
+Action: the tool to use (one of [{tool_names}]) OR say "No tool needed"
+Action Input: the input for the tool (if using a tool)
+Observation: the tool's response
+... (repeat Thought/Action/Observation if needed)
+Thought: I now know the final answer
+Final Answer: the complete answer to the question
+
+Begin!
+
+Previous conversation:
+{chat_history}
+
+Question: {input}
+{agent_scratchpad}"""
+    
+    prompt = PromptTemplate.from_template(template)
     
     agent = create_react_agent(
         llm=huggingfacehub,
@@ -87,7 +119,7 @@ def create_agent_executor(memory_instance: ConversationBufferMemory):
         memory=memory_instance,
         verbose=True,
         handle_parsing_errors=True,
-        max_iterations=5
+        max_iterations=3  # 👈 iteration 제한 줄임
     )
     
     logger.info("✅ Agent Executor created successfully")
