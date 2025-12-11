@@ -70,14 +70,41 @@ def run_vl_model_inference(image_identifier: str) -> str:
         prompt = "这张处方上写了什么？"
         analysis_result = ai_service.analyze_prescription_sync(image, prompt)
         
+        # 👇 추가: 메모리 정리
+        import gc
+        import torch
+        
+        del image  # 이미지 객체 삭제
+        gc.collect()  # 가비지 컬렉션
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()  # GPU 캐시 비우기
+
         logger.info(f"✅ VL 분석 완료: {image_identifier}")
+
+        # 👇 추가: DB 업데이트
+        try:
+            prescription_id = int(image_identifier)
+            supabase.table("prescriptions").update({
+                "ai_analysis": analysis_result,
+                "analysis_status": "completed"
+            }).eq("id", prescription_id).execute()
+            logger.info(f"💾 DB updated: prescription_id={prescription_id}")
+        except ValueError:
+            # file_key인 경우는 업데이트 생략
+            pass
         
         return analysis_result
         
     except Exception as e:
-        logger.error(f"❌ VL 모델 추론 실패: {e}")
-        import traceback
-        traceback.print_exc()
+        # 에러 시에도 상태 업데이트
+        try:
+            prescription_id = int(image_identifier)
+            supabase.table("prescriptions").update({
+                "analysis_status": "failed"
+            }).eq("id", prescription_id).execute()
+        except:
+            pass
+        
         return f"이미지 분석 중 오류가 발생했습니다: {str(e)}"
 
 
@@ -121,7 +148,8 @@ vl_tool = Tool(
     func=run_vl_model_inference,
     description=(
         "사용자가 이미지 파일을 업로드했거나, 이미지에 대한 분석/추론이 필요한 질문을 했을 때 사용합니다. "
-        "입력은 분석할 이미지의 경로(path) 또는 ID여야 합니다."
+        "특히 질문에 'prescription_id: 숫자' 형식이 포함되어 있으면 반드시 이 도구를 사용해야 합니다. "
+        "입력은 prescription_id 또는 이미지 파일 경로(file_key)여야 합니다."
     )
 )
 

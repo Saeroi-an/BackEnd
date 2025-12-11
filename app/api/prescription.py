@@ -2,12 +2,12 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from app.services.ai_service import ai_service
+# from app.services.ai_service import ai_service
 from app.services.s3_service import s3_service
 from app.services.chat_service import process_chat_with_db, save_message_to_db
 from supabase import create_client, Client
-from PIL import Image
-from io import BytesIO
+# from PIL import Image
+# from io import BytesIO
 import os
 import logging
 from app.core.config import settings
@@ -39,19 +39,14 @@ async def upload_prescription(
     user_id = current_user["id"]
     prescription_id = None
     user_message = query
-    prescription_analysis_result = None
+    # prescription_analysis_result = None
     
     # Case 1: 파일이 있는 경우
     if file and file.filename:
         logger.info(f"📤 File upload detected: {file.filename}")
         
         try:
-            # 1-1. 파일을 PIL.Image로 변환
-            contents = await file.read()
-            image = Image.open(BytesIO(contents)).convert("RGB")
-            
             # 1-2. S3에 업로드
-            await file.seek(0)
             upload_result = await s3_service.upload_prescription(file, user_id)
             
             # 1-3. Supabase DB에 저장
@@ -72,24 +67,10 @@ async def upload_prescription(
                 user_message = "这张处方上写了什么？"
                 logger.info("📝 Using default prompt (image only)")
             
-            # 1-5. VL 모델 직접 실행
-            logger.info(f"🔍 Running VL model analysis...")
-            prescription_analysis_result = await ai_service.analyze_prescription(
-                image=image,
-                prompt=user_message
-            )
-            logger.info(f"✅ VL analysis completed: {prescription_analysis_result[:100]}...")
-            
-            # 1-6. DB 업데이트
-            supabase.table("prescriptions").update({
-                "ai_analysis": prescription_analysis_result,
-                "analysis_status": "completed"
-            }).eq("id", prescription_id).execute()
-            
-            logger.info(f"🖼️ Image analyzed: prescription_id={prescription_id}")
+            logger.info(f"🖼️ Image uploaded: prescription_id={prescription_id}")
             
         except Exception as e:
-            logger.error(f"❌ File upload/analysis failed: {e}")
+            logger.error(f"❌ File upload failed: {e}")
             raise HTTPException(
                 status_code=500,
                 detail=f"파일 처리 실패: {str(e)}"
@@ -116,43 +97,51 @@ async def upload_prescription(
     except Exception as e:
         logger.error(f"사용자 메시지 저장 실패: {e}")
     
-    # 공통: VL 결과만 사용 (Agent 우회)
+    # 공통: Agent 실행
     try:
-        if prescription_analysis_result:
-            # CUDA 에러 또는 다른 에러 체크
-            if "CUDA out of memory" in prescription_analysis_result or prescription_analysis_result.startswith("Error:"):
-                ai_response = "GPU 메모리 부족으로 분석에 실패했습니다. 잠시 후 다시 시도해주세요."
-                logger.error(f"❌ VL Model error: {prescription_analysis_result[:200]}")
-                
-                # prescription 상태를 failed로 업데이트
-                if prescription_id:
-                    try:
-                        supabase.table("prescriptions").update({
-                            "analysis_status": "failed"
-                        }).eq("id", prescription_id).execute()
-                    except:
-                        pass
-            else:
-                # 정상 분석 결과
-                ai_response = prescription_analysis_result
-                logger.info(f"✅ VL analysis used as final response")
+        # prescription_id를 Agent에 전달
+        if prescription_id:
+            # 이미지가 있는 경우: prescription_id와 함께 질문 전달
+            enhanced_query = f"prescription_id: {prescription_id}\n사용자 질문: {user_message}"
+            logger.info(f"🖼️ Calling Agent with prescription_id={prescription_id}")
         else:
             # 텍스트만 있는 경우
-            ai_response = "처방전 이미지 분석이 필요합니다. 먼저 처방전 사진을 업로드해주세요."
-            logger.info(f"💬 Text-only response")
+            enhanced_query = user_message
+            logger.info(f"💬 Calling Agent (text only)")
         
-        logger.info(f"🤖 Response generated (VL only, Agent bypassed)")
+        # Agent 실행
+        ai_response = process_chat_with_db(
+            supabase=supabase,
+            user_id=str(user_id),
+            user_query=enhanced_query,
+            prescription_analysis=None  # 더 이상 전달 안 함
+        )
+        
+        logger.info(f"✅ Agent response generated")
+    
+        # 👇 추가: prescription이 있고 아직 pending 상태면 "completed"로 변경
+        if prescription_id:
+            try:
+                # 현재 상태 확인
+                current = supabase.table("prescriptions").select("analysis_status").eq(
+                    "id", prescription_id
+                ).execute()
+                
+                # pending 상태면 completed로 업데이트
+                if current.data and current.data[0]['analysis_status'] == 'pending':
+                    supabase.table("prescriptions").update({
+                        "analysis_status": "completed"
+                    }).eq("id", prescription_id).execute()
+                    logger.info(f"💾 Prescription status updated: completed")
+            except Exception as e:
+                logger.error(f"Status update failed: {e}")
         
     except Exception as e:
-        logger.error(f"❌ Response generation failed: {e}")
+        logger.error(f"❌ Agent execution failed: {e}")
         import traceback
         traceback.print_exc()
         
-        # 에러 시 분석 결과라도 반환
-        if prescription_analysis_result and not prescription_analysis_result.startswith("Error:"):
-            ai_response = prescription_analysis_result
-        else:
-            ai_response = "죄송합니다. 응답 생성 중 오류가 발생했습니다."
+        ai_response = "죄송합니다. 응답 생성 중 오류가 발생했습니다."
         
         # 에러 발생 시 prescription 상태 업데이트
         if prescription_id:
@@ -181,7 +170,7 @@ async def upload_prescription(
         prescription_id=prescription_id,
         user_message=user_message,
         ai_response=ai_response,
-        prescription_analysis=prescription_analysis_result
+        prescription_analysis=None
     )
 
 @router.get("/{prescription_id}")
