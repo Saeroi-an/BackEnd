@@ -3,10 +3,10 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 from langchain_community.llms import HuggingFacePipeline
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.memory import ConversationBufferMemory
+from langchain import hub  # 👈 추가
 import torch
 import os
 import logging
-
 from app.AImodels.tools import ALL_TOOLS
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,6 @@ logger.info(f"🔍 LLM_REPO_ID: {REPO_ID}")
 huggingfacehub = None
 initial_agent = None
 GLOBAL_TOOLS = ALL_TOOLS
-
 
 def initialize_global_agent():
     """전역 LLM과 Tool을 초기화 (로컬 모델)"""
@@ -47,8 +46,7 @@ def initialize_global_agent():
             model=model,
             tokenizer=tokenizer,
             max_new_tokens=512,
-            temperature=0.1,
-            # device=device
+            temperature=0.1
         )
         
         # LangChain LLM으로 래핑
@@ -67,7 +65,6 @@ def initialize_global_agent():
         initial_agent = False
         raise
 
-
 def create_agent_executor(memory_instance: ConversationBufferMemory):
     """세션별 Agent Executor 생성"""
     if not huggingfacehub or not initial_agent:
@@ -75,29 +72,8 @@ def create_agent_executor(memory_instance: ConversationBufferMemory):
     
     logger.info("🔧 Creating Agent Executor with memory...")
     
-    from langchain.prompts import PromptTemplate
-    
-    template = """Answer the following questions as best you can. You have access to the following tools:
-
-{tools}
-
-Use the following format:
-
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-Begin!
-
-Question: {input}
-Thought:{agent_scratchpad}"""
-    
-    prompt = PromptTemplate.from_template(template)
+    # LangChain Hub에서 공식 ReAct 프롬프트 가져오기
+    prompt = hub.pull("hwchase17/react")
     
     agent = create_react_agent(
         llm=huggingfacehub,
@@ -117,7 +93,6 @@ Thought:{agent_scratchpad}"""
     logger.info("✅ Agent Executor created successfully")
     
     return agent_executor
-
 
 SESSION_MEMORY_CACHE = {}
 
