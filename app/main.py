@@ -31,14 +31,13 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 새로이안 백엔드 서버 시작 중...")
     logger.info("=" * 80)
     
-    # Agent 초기화 비활성화 (CUDA OOM 방지)
-    # try:
-    #     logger.info("📦 LangChain Agent 초기화 중...")
-    #     initialize_global_agent()
-    #     logger.info("✅ LangChain Agent 초기화 완료")
-    # except Exception as e:
-    #     logger.error(f"❌ Agent 초기화 실패: {e}")
-    #     logger.warning("⚠️  채팅 기능이 제한될 수 있습니다.")
+    try:
+        logger.info("📦 LangChain Agent 초기화 중...")
+        initialize_global_agent()
+        logger.info("✅ LangChain Agent 초기화 완료")
+    except Exception as e:
+        logger.error(f"❌ Agent 초기화 실패: {e}")
+        logger.warning("⚠️  채팅 기능이 제한될 수 있습니다.")
     
     logger.info("⚠️ Agent 초기화 스킵 (VL 모델만 사용)")
     
