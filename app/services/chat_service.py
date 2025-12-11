@@ -69,11 +69,11 @@ def process_chat_with_db(
     prescription_analysis: dict = None
 ) -> str:
     """
-    DB 기반 채팅 처리
+    DB 기반 채팅 처리 (간단한 Tool 라우팅)
     
     Args:
         supabase: Supabase 클라이언트
-        user_id: 사용자 ID (= session_id)
+        user_id: 사용자 ID
         user_query: 사용자 질문
         prescription_analysis: 처방전 분석 결과 (옵션)
         
@@ -81,35 +81,41 @@ def process_chat_with_db(
         AI 응답
     """
     try:
-        # 1. DB에서 과거 채팅 기록 로드
-        chat_history = load_chat_history_from_db(supabase, user_id)
-        
-        # 2. 메모리 생성
-        memory = create_memory_from_history(chat_history)
-        
-        # 3. 프롬프트 생성 (처방전 정보 포함)
-        enhanced_query = user_query
-        if prescription_analysis:
-            enhanced_query = f"""
-처방전 분석 결과:
-{prescription_analysis}
-
-사용자 질문: {user_query}
-
-위 처방전 정보를 참고하여 답변해주세요.
-"""
-        
         logger.info(f"💬 Processing query for user: {user_id}")
         
-        # 4. Agent 실행
-        agent = create_agent_executor(memory)
-        # ai_response = agent.run(enhanced_query)
-        result = agent.invoke({"input": enhanced_query})
-        ai_response = result.get("output", "응답을 생성할 수 없습니다.")
+        # 1️⃣ prescription_id가 있으면 VL Tool 호출
+        if "prescription_id:" in user_query:
+            import re
+            match = re.search(r'prescription_id:\s*(\d+)', user_query)
+            if match:
+                prescription_id = match.group(1)
+                logger.info(f"🖼️ Detected prescription_id: {prescription_id}, calling VL Tool")
+                
+                # VL Tool 직접 호출
+                from app.AImodels.tools import run_vl_model_inference
+                vl_result = run_vl_model_inference(prescription_id)
+                
+                logger.info(f"✅ VL Tool completed")
+                return vl_result
         
-        logger.info(f"🤖 AI response generated")
+        # 2️⃣ 약물 정보 질문이면 Drug API Tool 호출
+        drug_keywords = ["약", "medicine", "drug", "medication", "처방", "복용", "부작용", "효능"]
+        if any(keyword in user_query.lower() for keyword in drug_keywords):
+            logger.info(f"💊 Drug-related question detected")
+            
+            # 약물 이름 추출 (간단한 방식)
+            from app.AImodels.tools import call_public_data_api
+            # 질문에서 첫 단어를 약물명으로 추정
+            words = user_query.split()
+            if len(words) > 0:
+                drug_name = words[0]
+                logger.info(f"💊 Searching for drug: {drug_name}")
+                drug_result = call_public_data_api(drug_name)
+                return drug_result
         
-        return ai_response
+        # 3️⃣ 일반 질문 - 기본 응답
+        logger.info(f"💬 General question, using default response")
+        return "처방전 이미지를 업로드하시면 AI가 분석해드립니다. 약물에 대해 궁금한 점이 있으시면 약물 이름을 말씀해주세요."
         
     except Exception as e:
         logger.error(f"❌ Chat processing error: {e}")
