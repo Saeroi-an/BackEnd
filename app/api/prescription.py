@@ -85,17 +85,6 @@ async def upload_prescription(
             )
         logger.info(f"💬 Text-only query received")
     
-    # 공통: 사용자 메시지 DB 저장
-    try:
-        save_message_to_db(
-            supabase=supabase,
-            user_id=str(user_id),
-            prescription_id=prescription_id,
-            message=user_message,
-            sender_type="user"
-        )
-    except Exception as e:
-        logger.error(f"사용자 메시지 저장 실패: {e}")
     
     # 공통: Agent 실행
     try:
@@ -110,7 +99,7 @@ async def upload_prescription(
             logger.info(f"💬 Calling Agent (text only)")
         
         # Agent 실행
-        ai_response = process_chat_with_db(
+        ai_response = process_chat_with_db( # supabase는 이미 과거 기록 + 신규 query
             supabase=supabase,
             user_id=str(user_id),
             user_query=enhanced_query,
@@ -152,8 +141,20 @@ async def upload_prescription(
             except:
                 pass
     
-    # 공통: AI 응답 DB 저장
+    # 공통: 채팅 로그 DB 저장 (✅ invoke 이후 저장: 히스토리와 신규쿼리 분리 유지)
     try:
+        # 1) 사용자 메시지 저장 (DB에는 “사용자 발화”만 저장)
+        # - user_message: 실제 사용자가 입력한 query (또는 기본 프롬프트로 설정된 문장)
+        # - prescription_id: 이미지 업로드 케이스면 연결해서 저장, 텍스트만이면 None
+        save_message_to_db(
+            supabase=supabase,
+            user_id=str(user_id),
+            prescription_id=prescription_id,
+            message=user_message,
+            sender_type="user"
+        )
+
+        # 2) AI 응답 저장
         save_message_to_db(
             supabase=supabase,
             user_id=str(user_id),
@@ -161,15 +162,17 @@ async def upload_prescription(
             message=ai_response,
             sender_type="ai"
         )
+
     except Exception as e:
-        logger.error(f"AI 응답 저장 실패: {e}")
+        logger.error(f"채팅 저장 실패: {e}")
+
     
     # 최종 응답 반환
     return ChatResponse(
         user_id=user_id,
         prescription_id=prescription_id,
-        user_message=user_message,
-        ai_response=ai_response,
+        user_message=user_message, # 신규 query
+        ai_response=ai_response, # 반환해야하는 값
         prescription_analysis=None
     )
 
@@ -284,7 +287,7 @@ async def chat_with_prescription(
     user_message = request.get("message", "")
     user_id = current_user["id"]
     
-    # Agent 실행
+    # Agent 실행 # ✅ check
     ai_response = process_chat_with_db(
         supabase=supabase,
         user_id=str(user_id),
