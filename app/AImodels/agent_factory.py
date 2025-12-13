@@ -1,89 +1,76 @@
 # app/AImodels/agent_factory.py
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
-from langchain_community.llms import HuggingFacePipeline
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.memory import ConversationBufferMemory
-from langchain import hub  # 👈 추가
-import torch
 import os
 import logging
+from supabase import Client
+from langchain.agents import create_react_agent, AgentExecutor
+from langchain_openai import ChatOpenAI
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain.tools import Tool
+from langchain_core.prompts import PromptTemplate
 from app.AImodels.tools import ALL_TOOLS
 
 logger = logging.getLogger(__name__)
 
-# 환경 변수 설정
-REPO_ID = os.getenv('LLM_REPO_ID', 'google/flan-t5-large')
-
-logger.info(f"🔍 LLM_REPO_ID: {REPO_ID}")
 
 # 전역 변수
-huggingfacehub = None
-initial_agent = None
 GLOBAL_TOOLS = ALL_TOOLS
+GLOBAL_LLM = None
 
 def initialize_global_agent():
     """전역 LLM과 Tool을 초기화 (로컬 모델)"""
-    global huggingfacehub, GLOBAL_TOOLS, initial_agent
+    global GLOBAL_TOOLS, GLOBAL_LLM
     
     try:
-        logger.info("🚀 Initializing Global LLM and Tools (Local Model)...")
+        logger.info("🚀 OpenAI 불러오는 중...")
         
-        # GPU 사용 가능 확인
-        device = 0 if torch.cuda.is_available() else -1
-        logger.info(f"🖥️ Using device: {'GPU' if device == 0 else 'CPU'}")
-        
-        # 토크나이저와 모델 로드
-        tokenizer = AutoTokenizer.from_pretrained(REPO_ID)
-        model = AutoModelForSeq2SeqLM.from_pretrained(
-            REPO_ID,
-            torch_dtype=torch.float16 if device == 0 else torch.float32,
-            device_map="auto" if device == 0 else None
+        # Initialize the language model with specific parameters
+        llm = ChatOpenAI(
+            model="gpt-3.5-turbo",
+            temperature=0.1,  # Low temperature for consistent reasoning
+            max_tokens=2000,
+            timeout=30
         )
         
-        # Pipeline 생성
-        pipe = pipeline(
-            "text2text-generation",
-            model=model,
-            tokenizer=tokenizer,
-            max_new_tokens=512,
-            temperature=0.1
-        )
-        
-        # LangChain LLM으로 래핑
-        huggingfacehub = HuggingFacePipeline(pipeline=pipe)
-        
+        logger.info(f"✅ global tools 출력 확인: {GLOBAL_TOOLS}")
         logger.info(f"✅ Tools loaded: {[tool.name for tool in GLOBAL_TOOLS]}")
         
-        initial_agent = True
         
-        logger.info(f"✅ LLM initialized (Local): {REPO_ID}")
+        GLOBAL_LLM = llm
+        
         logger.info(f"✅ Total tools: {len(GLOBAL_TOOLS)}")
         
     except Exception as e:
-        logger.error(f"❌ LLM 초기화 오류: {e}")
-        huggingfacehub = None
-        initial_agent = False
+        logger.error(f"❌ OpenAI 불러오기 오류: {e}")
+
         raise
 
-def create_agent_executor(memory_instance: ConversationBufferMemory):
-    """세션별 Agent Executor 생성"""
-    if not huggingfacehub or not initial_agent:
-        raise RuntimeError("LLM이 초기화되지 않았습니다.")
+# 이제 Supabase 직접 접근
+def create_agent_executor(supabase: Client, user_id: str):  # 👈 1. 파라미터 변경
+    """세션별 Agent Executor 생성 (Memory 없이 Supabase 직접 사용)"""
+    global GLOBAL_LLM, GLOBAL_TOOLS
     
-    logger.info("🔧 Creating Agent Executor with memory...")
+    if GLOBAL_LLM is None:
+        logger.error("❌ LLM이 초기화되지 않았습니다.")
+        raise ValueError("LLM is not initialized.")
     
-    # 커스텀 프롬프트 템플릿
-    from langchain.prompts import PromptTemplate
+    logger.info(f"🔧 Creating Agent Executor for user: {user_id}")
     
-    template = """You are a helpful medical assistant. Answer questions based on the tools available and conversation history.
+    # 👇 2. Supabase에서 채팅 기록 조회: 채팅 기록 직접 조회
+    from app.services.chat_service import load_chat_history_from_db
+    
+    chat_history = load_chat_history_from_db(supabase, user_id, limit=6)
+    chat_history_text = chat_history[0] if chat_history else ""
+ 
+    # Create optimized prompt template # ✅ check
+    react_prompt = PromptTemplate.from_template("""You are a helpful medical assistant. Answer questions based on the tools available and conversation history.
 
 Available tools:
-{tools}
+{ALL_TOOLS}
 
 Tool Names: {tool_names}
 
 Guidelines:
-- If the question contains "prescription_id: [number]", use VL_Model_Image_Analyzer with that number as input
+- If the question contains "prescription_id: [number]", use VL_Model_Image_Analyzer with that number as input 
 - For drug information questions, use Public_Data_API_Searcher
 - Otherwise, answer based on your knowledge
 
@@ -102,28 +89,33 @@ Begin!
 Previous conversation:
 {chat_history}
 
-Question: {input}
-{agent_scratchpad}"""
+Question: {user_query}""")
     
-    prompt = PromptTemplate.from_template(template)
+    
     
     agent = create_react_agent(
-        llm=huggingfacehub,
+        llm=GLOBAL_LLM,
         tools=GLOBAL_TOOLS,
-        prompt=prompt
+        prompt=react_prompt
     )
     
     agent_executor = AgentExecutor(
         agent=agent,
         tools=GLOBAL_TOOLS,
-        memory=memory_instance,
+        # memory=memory_instance, : memory 파라미터 제거: 채팅 기록이 이미 프롬프트에 포함됨 & LangChain Memory 시스템 불필요
         verbose=True,
         handle_parsing_errors=True,
-        max_iterations=3  # 👈 iteration 제한 줄임
+        max_iterations=3 
     )
     
-    logger.info("✅ Agent Executor created successfully")
+    logger.info("ReAct agent created successfully")
     
+    # executor 객체만 반환: invoke는 chat_service에서 실행 & agent_factory는 생성만 담당
+    # ai_response = agent_executor.invoke({"input": user_query})
+    logger.info("✅ Agent Executor created successfully")
+    # logger.info(f"랭체인이 생성한 답변: {ai_response}")
+    
+    # return ai_response # string
     return agent_executor
 
 SESSION_MEMORY_CACHE = {}
