@@ -2,7 +2,14 @@
 import os
 import logging
 from supabase import Client
-from langchain.agents import create_react_agent, AgentExecutor
+from langchain.agents import AgentExecutor
+
+try:
+    # 어떤 버전에서는 여기서 export 됨
+    from langchain.agents import create_react_agent
+except ImportError:
+    # LangChain 1.x에서 자주 이 위치에 있음
+    from langchain.agents.react.agent import create_react_agent
 from langchain_openai import ChatOpenAI
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain.tools import Tool
