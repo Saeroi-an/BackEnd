@@ -56,7 +56,7 @@ def run_vl_model_inference(image_identifier: str) -> str:
             return f"처방전 ID {prescription_id}의 이미지 URL이 없습니다."
         
         # 4. VQA API 호출 (HTTP 요청)
-        vqa_api_url = "http://localhost:8000/api/vqa_inference"
+        vqa_api_url = "http://localhost:8001/api/vqa_inference"
         
         logger.info(f"📡 VQA API 호출 시작: prescription_id={prescription_id}")
         
