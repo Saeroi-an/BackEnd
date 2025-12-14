@@ -8,14 +8,7 @@ from supabase import Client
 # 기존 코드(레거시 ReAct 에이전트)를 유지하려면 classic에서 가져오는 게 안정적.
 from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
 # ↑ AgentExecutor: "Agent(추론 로직) + Tools(도구)"를 묶어서 실행(invoke)할 수 있게 해주는 실행기
-try:
-    from langchain_classic.agents import create_react_agent
-except ImportError:
-    # 버전/배포 형태에 따라 위 경로로 export가 안 되어 있을 수 있음 -> 그럴 땐 실제 구현 위치(react.agent)에서 직접 import.
-    #  이렇게 try/except로 fallback을 두면 환경/버전이 조금 달라도 서비스가 깨질 확률이 낮아짐.
-    from langchain_classic.agents.react.agent import create_react_agent
 from langchain_openai import ChatOpenAI
-from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain.tools import tool
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from app.AImodels.tools import ALL_TOOLS
