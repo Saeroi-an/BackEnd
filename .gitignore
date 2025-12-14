@@ -33,6 +33,7 @@ build/
 test_db.py
 test_db2.py
 test_db3.py
+langchain_agent.py
 
 # Python cache
 __pycache__/
