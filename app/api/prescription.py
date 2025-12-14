@@ -26,7 +26,6 @@ class ChatResponse(BaseModel):
     prescription_id: Optional[int] = None
     user_message: str
     ai_response: str
-    prescription_analysis: Optional[str] = None
 
 @router.post("/upload", response_model=ChatResponse)
 async def upload_prescription(
@@ -103,7 +102,6 @@ async def upload_prescription(
             supabase=supabase,
             user_id=str(user_id),
             user_query=enhanced_query,
-            # prescription_analysis=None  # 더 이상 전달 안 함
         )
         
         logger.info(f"✅ Agent response generated")
@@ -173,7 +171,6 @@ async def upload_prescription(
         prescription_id=prescription_id,
         user_message=user_message, # 신규 query
         ai_response=ai_response, # 반환해야하는 값
-        # prescription_analysis=None
     )
 
 @router.get("/{prescription_id}")
@@ -292,7 +289,6 @@ async def chat_with_prescription(
         supabase=supabase,
         user_id=str(user_id),
         user_query=user_message,
-        prescription_analysis=None
     )
     
     # 메시지 DB 저장
