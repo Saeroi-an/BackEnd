@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 
 def load_chat_history_from_db(supabase: Client, user_id: str, limit: int = 25) -> list:
     """
-    Supabase에서 사용자의 과거 채팅 기록을 가져와 "하나의 문자열"로 합친 뒤 리스트로 감싸서 반환
-    (형태: ["Human: ...\\nAI: ...\\n"])
+    Supabase에서 사용자의 과거 채팅 기록을 가져와 LangChain 메시지 객체 리스트로 반환
     """
     try:
-        # 1) prescription_chats 테이블에서 user_id로 필터링하여 조회.
-        #    created_at 기준 desc(내림차순)으로 가져오면 최근 기록부터 내려옴.
+        from langchain_core.messages import HumanMessage, AIMessage
+        
+        # 1) prescription_chats 테이블에서 user_id로 필터링하여 조회
         query = (
             supabase.table("prescription_chats")
             .select("*")
@@ -29,82 +29,64 @@ def load_chat_history_from_db(supabase: Client, user_id: str, limit: int = 25) -
             .order("created_at", desc=True)
         )
         
-        # 2) limit이 있으면 최근 limit개만 가져오기.
+        # 2) limit이 있으면 최근 limit개만 가져오기
         if limit:
             query = query.limit(limit)
         
         # 3) 쿼리 실행
         result = query.execute()
         
-        # 4) DB에서 가져온 결과는 desc(최근→과거)일 가능성이 높음.
-        #    프롬프트에 넣을 때는 대화 흐름을 created_at 오름차순(시간순)으로 다시 정렬.
+        # 4) 시간순으로 정렬
         chat_history = sorted(result.data, key=lambda x: x["created_at"]) if result.data else []
         
-        # 5) "Human: ...", "AI: ..." 포맷으로 한 덩어리 문자열로 합침.
-        #    ※ 여기 포맷은 프롬프트 설계에 따라 바뀌어도 됨
-        history_text = ""
+        # 5) LangChain 메시지 객체로 변환
+        messages = []
         for msg in chat_history:
             if msg["sender_type"] == "user":
-                history_text += f"Human: {msg['message']}\n"
+                messages.append(HumanMessage(content=msg["message"]))
             elif msg["sender_type"] == "ai":
-                history_text += f"AI: {msg['message']}\n"
+                messages.append(AIMessage(content=msg["message"]))
         
-        # 6) 호환성 유지 목적으로 리스트로 감싸 반환함.
-        return [history_text]
+        return messages
     
     except Exception as e:
-        # DB 조회 실패 등 예외가 나면 빈 문자열 리스트를 반환.
-        # 호출부에서는 [0]으로 꺼내 쓸 때도 안전하게 동작함.
         logger.error(f"채팅 기록 조회 실패: {e}")
-        return [""]
+        return []
 
 
 def process_chat_with_db(
     supabase: Client,
     user_id: str,
-    user_query: str,
-    prescription_analysis: dict = None
+    user_query: str
 ) -> str:
     """
     DB 기반 채팅 처리 메인 함수
     
-    Supabase에서 과거 대화 기록을 가져와 chat_history_text를 만들고 
-    필요 시 처방전 분석 결과를 질문에 함께 포함.
-    AgentExecutor를 생성 후 invoke()를 실행하여 결과에서 "output"을 문자열로 반환함.
+    Supabase에서 과거 대화 기록을 가져와 LangChain Agent를 실행하여 AI 응답 생성
     
     Args:
         supabase (Client): Supabase 클라이언트
         user_id (str): 사용자 ID
-        user_query (str): 사용자의 현재 질문(입력)
-        prescription_analysis (dict | None): 처방전 분석 결과(선택)
+        user_query (str): 사용자의 현재 질문 (prescription.py에서 이미 전처리됨)
     
     Returns:
         str: AI 응답 문자열
     """
     try:
-        # 1) 최근 대화 기록을 DB에서 가져오기
-        chat_history_text = load_chat_history_from_db(supabase, user_id, limit=25)[0]
+        # 1) 최근 대화 기록을 DB에서 가져오기 (메시지 객체 리스트)
+        chat_history_messages = load_chat_history_from_db(supabase, user_id, limit=25)
         
-        # 2) 사용자 질문 보강(enhanced_query)
-#        enhanced_query = user_query
-#         if prescription_analysis:
-#             enhanced_query = f"""처방전 분석 결과:
-# {prescription_analysis}
-# 사용자 질문: {user_query}
-# 위 처방전 정보를 참고하여 답변해주세요.
-# """
-        
+        # 2) user_query를 그대로 사용 (prescription.py에서 이미 처리됨)
         logger.info(f"💬 Processing query for user: {user_id}")
+        logger.info(f"📝 User query: {user_query[:100]}...")  # 처음 100자만 로그
         
         # 3) AgentExecutor 생성
-        # (중요) agent_factory 내부에서 memory를 쓰지 않아야 함
         executor = create_agent_executor(supabase, user_id)
         
-        # 4) invoke() 실행 (여기서 실제 LLM 호출/툴 호출이 일어남)
-        # ✅ 수정: "input" → "user_query" (agent_factory.py의 프롬프트와 일치)
+        # 4) invoke() 실행 (LangChain 메시지 객체 리스트 전달)
         result = executor.invoke({
-            "input": user_query,      # ← 수정됨
-            "chat_history": chat_history_text
+            "input": user_query,  # prescription.py에서 이미 "prescription_id: X\n..." 형식으로 전달됨
+            "chat_history": chat_history_messages
         })
         
         # 5) 결과에서 "output"만 뽑아 문자열로 반환
@@ -174,17 +156,21 @@ def get_history_from_supabase(session_id: str, supabase: Client = None) -> str:
     Returns:
         대화 기록 문자열
     """
+    from langchain_core.messages import HumanMessage, AIMessage
+    
     if supabase is None:
-        # Supabase 클라이언트가 없으면 기본 반환
         return f"[[이전 대화 기록 for {session_id}]]"
     
-    chat_history = load_chat_history_from_db(supabase, session_id)
+    # 메시지 객체 리스트 가져오기
+    messages = load_chat_history_from_db(supabase, session_id)
     
     # 문자열 형식으로 변환
     history_text = f"[[이전 대화 기록 for {session_id}]]\n"
-    for msg in chat_history:
-        sender = "사용자" if msg['sender_type'] == 'user' else "AI"
-        history_text += f"{sender}: {msg['message']}\n"
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            history_text += f"사용자: {msg.content}\n"
+        elif isinstance(msg, AIMessage):
+            history_text += f"AI: {msg.content}\n"
     
     return history_text
 
