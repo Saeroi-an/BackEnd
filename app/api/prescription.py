@@ -189,6 +189,47 @@ async def get_prescription(
         "data": result.data[0]
     }
 
+@router.get("/{prescription_id}/image-path")
+async def get_prescription_image_path(
+    prescription_id: int,
+    supabase: Client = Depends(get_supabase)
+):
+    """
+    처방전 이미지 경로 조회 (LangChain Tool용)
+    
+    Args:
+        prescription_id (int): 처방전 ID
+        supabase (Client): Supabase 클라이언트 (의존성 주입)
+    
+    Returns:
+        dict: {
+            "success": bool,
+            "prescription_id": int,
+            "file_url": str  # S3에 저장된 이미지의 전체 URL
+        }
+    
+    Raises:
+        HTTPException: 처방전을 찾을 수 없는 경우 404 에러
+    
+    Note:
+        - 이 엔드포인트는 LangChain Agent의 VQA Tool에서 사용됩니다.
+        - prescription_id로 Supabase에서 file_url(S3 경로)을 조회합니다.
+        - 인증이 필요 없는 공개 엔드포인트입니다 (Tool에서 접근).
+    """
+    # Supabase에서 해당 처방전의 file_url만 조회
+    result = supabase.table("prescriptions").select("file_url").eq("id", prescription_id).execute()
+    
+    # 처방전이 존재하지 않으면 404 에러
+    if not result.data:
+        raise HTTPException(status_code=404, detail="처방전을 찾을 수 없습니다.")
+    
+    # 성공 응답 반환
+    return {
+        "success": True,
+        "prescription_id": prescription_id,
+        "file_url": result.data[0]['file_url']
+    }
+
 @router.get("/user/{user_id}")
 async def get_user_prescriptions(
     user_id: str,
@@ -299,3 +340,63 @@ async def chat_with_prescription(
     return {
         "ai_response": ai_response
     }
+
+@router.get("/messages")
+async def get_chat_messages(
+    user_id: str,
+    prescription_id: Optional[int] = None,
+    limit: int = 25,
+    supabase: Client = Depends(get_supabase)
+):
+    """
+    사용자의 채팅 메시지 조회 (프론트엔드용)
+    
+    Args:
+        user_id (str): 사용자 ID (= session_id)
+        prescription_id (int, optional): 특정 처방전 관련 메시지만 필터링
+        limit (int): 조회할 최대 메시지 개수 (기본값: 25)
+        supabase (Client): Supabase 클라이언트
+    
+    Returns:
+        dict: {
+            "success": bool,
+            "user_id": str,
+            "total_messages": int,
+            "messages": list  # 시간 순서대로 정렬 (오래된 것부터)
+        }
+    
+    Raises:
+        HTTPException: 메시지 조회 실패 시 500 에러
+    
+    Note:
+        - 옵션 1 (단일 세션): user_id = session_id
+        - 모든 대화가 하나의 세션에 저장됨
+        - prescription_id로 특정 처방전 관련 메시지만 필터링 가능
+        - 프론트엔드가 앱 시작 시 대화 기록을 로드하는 데 사용
+    """
+    try:
+        # 기본 쿼리: user_id로 필터링
+        query = supabase.table("prescription_chats").select("*").eq("user_id", user_id)
+        
+        # prescription_id 필터링 (옵션)
+        if prescription_id is not None:
+            query = query.eq("prescription_id", prescription_id)
+        
+        # 최근 메시지부터 조회 후 limit 적용
+        result = query.order("created_at", desc=True).limit(limit).execute()
+        
+        # 시간 순서로 정렬 (오래된 것부터 - 채팅 UI 표시용)
+        messages = list(reversed(result.data)) if result.data else []
+        
+        logger.info(f"📨 Retrieved {len(messages)} messages for user {user_id}")
+        
+        return {
+            "success": True,
+            "user_id": user_id,
+            "total_messages": len(messages),
+            "messages": messages
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ 메시지 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"메시지 조회 중 오류 발생: {str(e)}")
