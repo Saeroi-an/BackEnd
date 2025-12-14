@@ -3,21 +3,19 @@ from langchain.tools import BaseTool, Tool
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.services.drug_service import get_drug_info
-from app.services.ai_service import ai_service
-from PIL import Image
+import requests
 import logging
 
 logger = logging.getLogger(__name__)
 
 # [A] 사용자 정의 Tool 함수
-# app/AImodels/tools.py 중 run_vl_model_inference 함수만 수정
 
 def run_vl_model_inference(image_identifier: str) -> str:
     """
-    VL 모델 추론 함수
+    VL 모델 추론 함수 (VQA API 호출 방식)
     
     Args:
-        image_identifier: prescription_id 또는 file_key
+        image_identifier: prescription_id (문자열 또는 숫자)
         
     Returns:
         VL 모델 분석 결과 텍스트
@@ -25,87 +23,105 @@ def run_vl_model_inference(image_identifier: str) -> str:
     try:
         from supabase import create_client
         from app.core.config import settings
-        from app.services.s3_service import s3_service
-        from app.services.ai_service import ai_service
-        from PIL import Image
-        from io import BytesIO
         
         logger.info(f"🖼️ VL Tool 호출: {image_identifier}")
         
         # Supabase 클라이언트 생성
         supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
         
-        # prescription_id로 조회 시도
+        # 1. prescription_id로 변환 시도
         try:
             prescription_id = int(image_identifier)
-            result = supabase.table("prescriptions").select("file_key, ai_analysis").eq(
-                "id", prescription_id
-            ).execute()
-            
-            if not result.data:
-                return f"처방전 ID {image_identifier}를 찾을 수 없습니다."
-            
-            # 이미 분석된 결과가 있으면 반환
-            if result.data[0].get('ai_analysis'):
-                logger.info(f"✅ 기존 분석 결과 사용: prescription_id={image_identifier}")
-                return str(result.data[0]['ai_analysis'])
-            
-            file_key = result.data[0]['file_key']
-            
         except ValueError:
-            # 숫자가 아니면 file_key로 간주
-            file_key = image_identifier
+            return f"오류: prescription_id는 숫자여야 합니다: {image_identifier}"
         
-        # S3에서 이미지 다운로드
-        logger.info(f"📥 S3에서 이미지 다운로드: {file_key}")
-        image_bytes = s3_service.download_prescription(file_key)
+        # 2. Supabase에서 처방전 정보 조회
+        result = supabase.table("prescriptions").select(
+            "file_url, ai_analysis, analysis_status"
+        ).eq("id", prescription_id).execute()
         
-        if not image_bytes:
-            return f"이미지를 다운로드할 수 없습니다: {file_key}"
+        if not result.data:
+            return f"처방전 ID {prescription_id}를 찾을 수 없습니다."
         
-        # PIL Image로 변환
-        image = Image.open(BytesIO(image_bytes)).convert("RGB")
+        prescription_data = result.data[0]
         
-        # VL 모델 실행 (동기 버전 사용)
-        prompt = "这张处方上写了什么？"
-        analysis_result = ai_service.analyze_prescription_sync(image, prompt)
+        # 3. 이미 분석된 결과가 있으면 반환 (캐시 활용)
+        if prescription_data.get('ai_analysis') and prescription_data.get('analysis_status') == 'completed':
+            logger.info(f"✅ 기존 분석 결과 사용: prescription_id={prescription_id}")
+            return str(prescription_data['ai_analysis'])
         
-        # 👇 추가: 메모리 정리
-        import gc
-        import torch
+        file_url = prescription_data.get('file_url')
+        if not file_url:
+            return f"처방전 ID {prescription_id}의 이미지 URL이 없습니다."
         
-        del image  # 이미지 객체 삭제
-        gc.collect()  # 가비지 컬렉션
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()  # GPU 캐시 비우기
-
-        logger.info(f"✅ VL 분석 완료: {image_identifier}")
-
-        # 👇 추가: DB 업데이트
+        # 4. VQA API 호출 (HTTP 요청)
+        vqa_api_url = "http://localhost:8000/api/vqa_inference"
+        
+        logger.info(f"📡 VQA API 호출 시작: prescription_id={prescription_id}")
+        
         try:
-            prescription_id = int(image_identifier)
-            supabase.table("prescriptions").update({
-                "ai_analysis": analysis_result,
-                "analysis_status": "completed"
-            }).eq("id", prescription_id).execute()
-            logger.info(f"💾 DB updated: prescription_id={prescription_id}")
-        except ValueError:
-            # file_key인 경우는 업데이트 생략
-            pass
-        
-        return analysis_result
+            response = requests.post(
+                vqa_api_url,
+                json={
+                    "image_path": file_url,
+                    "question": "这张处方上写了什么？ 尤其是药品、服用次数等，请准确全部告诉我。",
+                    "prescription_id": prescription_id
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=60  # 60초 타임아웃 (VL 모델 추론 시간 고려)
+            )
+            
+            if not response.ok:
+                raise Exception(f"VQA API 호출 실패: 상태 코드 {response.status_code}")
+            
+            data = response.json()
+            analysis_result = data.get("inference_result", "")
+            
+            logger.info(f"✅ VQA API 호출 성공: prescription_id={prescription_id}")
+            
+            # 5. DB 업데이트 (분석 결과 저장)
+            try:
+                supabase.table("prescriptions").update({
+                    "ai_analysis": analysis_result,
+                    "analysis_status": "completed"
+                }).eq("id", prescription_id).execute()
+                logger.info(f"💾 DB 업데이트 완료: prescription_id={prescription_id}")
+            except Exception as db_error:
+                logger.error(f"DB 업데이트 실패: {db_error}")
+            
+            return analysis_result
+            
+        except requests.exceptions.Timeout:
+            error_msg = f"VQA API 요청 시간 초과 (60초): prescription_id={prescription_id}"
+            logger.error(error_msg)
+            
+            # 에러 시 상태 업데이트
+            try:
+                supabase.table("prescriptions").update({
+                    "analysis_status": "failed"
+                }).eq("id", prescription_id).execute()
+            except:
+                pass
+            
+            return f"이미지 분석 중 시간 초과가 발생했습니다."
+            
+        except Exception as api_error:
+            error_msg = f"VQA API 호출 오류: {api_error}"
+            logger.error(error_msg)
+            
+            # 에러 시 상태 업데이트
+            try:
+                supabase.table("prescriptions").update({
+                    "analysis_status": "failed"
+                }).eq("id", prescription_id).execute()
+            except:
+                pass
+            
+            return f"이미지 분석 중 오류가 발생했습니다: {str(api_error)}"
         
     except Exception as e:
-        # 에러 시에도 상태 업데이트
-        try:
-            prescription_id = int(image_identifier)
-            supabase.table("prescriptions").update({
-                "analysis_status": "failed"
-            }).eq("id", prescription_id).execute()
-        except:
-            pass
-        
-        return f"이미지 분석 중 오류가 발생했습니다: {str(e)}"
+        logger.error(f"VL Tool 실행 오류: {e}")
+        return f"처방전 분석 중 오류가 발생했습니다: {str(e)}"
 
 
 def call_public_data_api(search_query: str) -> str:
@@ -149,7 +165,8 @@ vl_tool = Tool(
     description=(
         "사용자가 이미지 파일을 업로드했거나, 이미지에 대한 분석/추론이 필요한 질문을 했을 때 사용합니다. "
         "특히 질문에 'prescription_id: 숫자' 형식이 포함되어 있으면 반드시 이 도구를 사용해야 합니다. "
-        "입력은 prescription_id 또는 이미지 파일 경로(file_key)여야 합니다."
+        "입력은 prescription_id(숫자)여야 합니다. "
+        "예: 'prescription_id: 3'이 포함된 질문이면 이 도구에 '3'을 입력하세요."
     )
 )
 
@@ -165,9 +182,7 @@ api_tool = Tool(
 # [C] 전역 Tool 리스트 (agent_factory.py에서 사용)
 ALL_TOOLS: List[Tool] = [vl_tool, api_tool]
 
-
 # [D] 기존 BaseTool 방식도 유지 (호환성)
-
 class DrugSearchInput(BaseModel):
     """약물 검색을 위한 입력 스키마"""
     drug_name: str = Field(description="검색할 약물의 이름")
