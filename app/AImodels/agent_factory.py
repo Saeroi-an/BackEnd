@@ -12,6 +12,7 @@ from langchain_openai import ChatOpenAI
 from langchain.tools import tool
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from app.AImodels.tools import ALL_TOOLS
+from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ def initialize_global_agent():
         # Initialize the language model with specific parameters
         llm = ChatOpenAI(
             model="gpt-3.5-turbo",
+            api_key=settings.OPENAI_API_KEY,
             temperature=0.1,  # Low temperature for consistent reasoning
             max_tokens=2000,
             timeout=30
