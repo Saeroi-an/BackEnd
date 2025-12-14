@@ -109,7 +109,7 @@ def process_chat_with_db(
         
         # 5) 결과에서 "output"만 뽑아 문자열로 반환
         ai_response = result.get("output", "응답을 생성할 수 없습니다.")
-        logger.info(f"ai response 상황!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: {ai_response}")
+        logger.info(f"result 상황!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: {result}")
         logger.info("🤖 AI response generated")
         
         return ai_response

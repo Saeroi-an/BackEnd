@@ -1,5 +1,5 @@
 # app/AImodels/tools.py
-from langchain.tools import BaseTool, tool, Tool
+from langchain.tools import BaseTool, tool
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.services.drug_service import get_drug_info
@@ -160,41 +160,41 @@ def call_public_data_api(search_query: str) -> str:
 
 
 # [B] Tool 객체 생성 및 Description 명시 (매우 중요)
-vl_tool = Tool(
-    name="VL_Model_Image_Analyzer",
-    func=run_vl_model_inference,
-    description=(
-        "사용자가 이미지 파일을 업로드했거나, 이미지에 대한 분석/추론이 필요한 질문을 했을 때 사용합니다. "
-        "특히 질문에 'prescription_id: 숫자' 형식이 포함되어 있으면 반드시 이 도구를 사용해야 합니다. "
-        "입력은 prescription_id(숫자)여야 합니다. "
-        "예: 'prescription_id: 3'이 포함된 질문이면 이 도구에 '3'을 입력하세요."
-    )
-)
+# vl_tool = Tool(
+#     name="VL_Model_Image_Analyzer",
+#     func=run_vl_model_inference,
+#     description=(
+#         "사용자가 이미지 파일을 업로드했거나, 이미지에 대한 분석/추론이 필요한 질문을 했을 때 사용합니다. "
+#         "특히 질문에 'prescription_id: 숫자' 형식이 포함되어 있으면 반드시 이 도구를 사용해야 합니다. "
+#         "입력은 prescription_id(숫자)여야 합니다. "
+#         "예: 'prescription_id: 3'이 포함된 질문이면 이 도구에 '3'을 입력하세요."
+#     )
+# )
 
-api_tool = Tool(
-    name="Public_Data_API_Searcher",
-    func=call_public_data_api,
-    description=(
-        "LLM의 학습 데이터에 없는 최신 정보, 실시간 데이터, 또는 공공데이터와 같은 특정 도메인 지식이 필요할 때 사용합니다. "
-        "약물 이름, 의약품 정보 등을 검색할 때 이 도구를 사용하세요. 질문에 포함된 키워드로 검색을 수행합니다."
-    )
-)
+# api_tool = Tool(
+#     name="Public_Data_API_Searcher",
+#     func=call_public_data_api,
+#     description=(
+#         "LLM의 학습 데이터에 없는 최신 정보, 실시간 데이터, 또는 공공데이터와 같은 특정 도메인 지식이 필요할 때 사용합니다. "
+#         "약물 이름, 의약품 정보 등을 검색할 때 이 도구를 사용하세요. 질문에 포함된 키워드로 검색을 수행합니다."
+#     )
+# )
 
-multiply_tool = Tool(
-    name = "multiply_tool",
-    func = multiply,
-    description = (
-        "사용자가  두개의 숫자를 주고 '곱하라'라고 입력이 들어올 때, 이 함수를 이용합니다."
-    )
-)
+# multiply_tool = Tool(
+#     name = "multiply_tool",
+#     func = multiply,
+#     description = (
+#         "사용자가  두개의 숫자를 주고 '곱하라'라고 입력이 들어올 때, 이 함수를 이용합니다."
+#     )
+# )
 
-add_tool = Tool(
-    name = "add_tool",
-    func = add,
-    description = (
-        "사용자가  두개의 숫자를 주고 '더하라'라고 입력이 들어올 때, 이 함수를 이용합니다."
-    )
-)
+# add_tool = Tool(
+#     name = "add_tool",
+#     func = add,
+#     description = (
+#         "사용자가  두개의 숫자를 주고 '더하라'라고 입력이 들어올 때, 이 함수를 이용합니다."
+#     )
+# )
 
 
 @tool
@@ -210,4 +210,4 @@ def add(x: float, y: float) -> float:
 
 
 # [C] 전역 Tool 리스트 (agent_factory.py에서 사용)
-ALL_TOOLS: List[Tool] = [vl_tool, api_tool, multiply_tool, add_tool]
+ALL_TOOLS = [run_vl_model_inference, call_public_data_api, multiply, add]
