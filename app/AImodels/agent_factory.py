@@ -71,32 +71,22 @@ def create_agent_executor(supabase: Client, user_id: str):
  
     # Create optimized prompt template # ✅ check
     react_prompt = ChatPromptTemplate.from_messages([
-        ("system", """
-        Available tools:
-{tools}
+        ("system", """You are a helpful medical assistant for Chinese patients in Korea.
 
-Tool Names: {tool_names}
+Your capabilities:
+- Analyze prescription images when users upload them
+- Search for Korean drug information
+- Answer medical questions in Chinese
 
 Guidelines:
-- If the question contains "prescription_id: [number]", use VL_Model_Image_Analyzer with that number as input 
-- For drug information questions, use Public_Data_API_Searcher
-- Otherwise, answer based on your knowledge
+- Always respond in Chinese (中文)
+- Be clear and concise
+- If you need to analyze a prescription image, use the available tools
+- If asked about drug information, search using the drug API tool
+- Provide helpful medical guidance while being cautious about medical advice
 
-Use this format:
-Question: the input question
-Thought: think about what to do
-Action: the tool to use (one of [{tool_names}]) OR say "No tool needed"
-Action Input: the input for the tool (if using a tool)
-Observation: the tool's response
-... (repeat Thought/Action/Observation if needed)
-Thought: I now know the final answer
-Final Answer: the complete answer to the question
-
-Begin!
-
-
-    """
-         ),
+Remember: You're helping Chinese patients understand Korean prescriptions and medical information."""),
+        ("placeholder", "{chat_history}"),
         ("human", "{input}"),
         ("placeholder", "{agent_scratchpad}")
     ])
