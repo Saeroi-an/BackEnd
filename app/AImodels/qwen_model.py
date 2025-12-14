@@ -24,15 +24,15 @@ class QwenModel:
             self.device = device
         print(f"디바이스 종류: {self.device}")
 
-        # print("모델 로드 중...")
-        # # 1️⃣ 모델 로드 수정
-        # self.model = Qwen2VLForConditionalGeneration.from_pretrained(
-        #     model_name,
-        #     torch_dtype=torch.float16 if self.device=="cuda" else torch.float32,
-        #     device_map="auto" if self.device=="cuda" else None
-        # )
-        # self.model.eval()
-        # print("모델 로드 완료!")
+        print("모델 로드 중...")
+        # 1️⃣ 모델 로드 수정
+        self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+            model_name,
+            torch_dtype=torch.float16 if self.device=="cuda" else torch.float32,
+            device_map="auto" if self.device=="cuda" else None
+        )
+        self.model.eval()
+        print("모델 로드 완료!")
         
         
         # 2️⃣ 프로세서 로드
