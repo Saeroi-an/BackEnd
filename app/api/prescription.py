@@ -103,7 +103,7 @@ async def upload_prescription(
             supabase=supabase,
             user_id=str(user_id),
             user_query=enhanced_query,
-            prescription_analysis=None  # 더 이상 전달 안 함
+            # prescription_analysis=None  # 더 이상 전달 안 함
         )
         
         logger.info(f"✅ Agent response generated")
@@ -173,7 +173,7 @@ async def upload_prescription(
         prescription_id=prescription_id,
         user_message=user_message, # 신규 query
         ai_response=ai_response, # 반환해야하는 값
-        prescription_analysis=None
+        # prescription_analysis=None
     )
 
 @router.get("/{prescription_id}")
