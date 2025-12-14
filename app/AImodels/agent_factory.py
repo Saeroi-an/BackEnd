@@ -2,14 +2,18 @@
 import os
 import logging
 from supabase import Client
-from langchain.agents import AgentExecutor
 
+# LangChain 최신 버전(1.x)에서는 기존의 에이전트 구현(AgentExecutor, ReAct agent 등)이
+# 'langchain' 본 패키지에서 분리되어 'langchain-classic' 패키지로 이동한 경우가 많음.
+# 기존 코드(레거시 ReAct 에이전트)를 유지하려면 classic에서 가져오는 게 안정적.
+from langchain_classic.agents import AgentExecutor
+# ↑ AgentExecutor: "Agent(추론 로직) + Tools(도구)"를 묶어서 실행(invoke)할 수 있게 해주는 실행기
 try:
-    # 어떤 버전에서는 여기서 export 됨
-    from langchain.agents import create_react_agent
+    from langchain_classic.agents import create_react_agent
 except ImportError:
-    # LangChain 1.x에서 자주 이 위치에 있음
-    from langchain.agents.react.agent import create_react_agent
+    # 버전/배포 형태에 따라 위 경로로 export가 안 되어 있을 수 있음 -> 그럴 땐 실제 구현 위치(react.agent)에서 직접 import.
+    #  이렇게 try/except로 fallback을 두면 환경/버전이 조금 달라도 서비스가 깨질 확률이 낮아짐.
+    from langchain_classic.agents.react.agent import create_react_agent
 from langchain_openai import ChatOpenAI
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain.tools import Tool
