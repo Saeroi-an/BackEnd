@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # =========================
 # 설정값
 # =========================
-MODEL_NAME = "Rfy23/qwenvl-7B-medical-ko-zh"
+MODEL_NAME = "Rfy23/qwen2vl-ko-zh"
 IMAGE_URL = "BackEnd/testimage.jpg"  # 실행 위치에 따라 상대경로가 꼬일 수 있어 아래에서 abs로 변환합니다.
 FIXED_QUESTION = "这张处方上写了什么？ 尤其是药品、服用次数等，请准确全部告诉我。"
 
