@@ -12,7 +12,6 @@ from langchain_openai import ChatOpenAI
 from langchain.tools import tool
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from app.AImodels.tools import ALL_TOOLS
-from app.services.chat_service import load_chat_history_from_db
 
 
 logger = logging.getLogger(__name__)
@@ -51,8 +50,11 @@ def initialize_global_agent():
         raise
 
 # 이제 Supabase 직접 접근
-def create_agent_executor(supabase: Client, user_id: str):  # 👈 1. 파라미터 변경
+def create_agent_executor(supabase: Client, user_id: str):
     """세션별 Agent Executor 생성 (Memory 없이 Supabase 직접 사용)"""
+    # Import at function level to avoid circular dependency
+    from app.services.chat_service import load_chat_history_from_db
+    
     global GLOBAL_LLM, GLOBAL_TOOLS
     
     if GLOBAL_LLM is None:
@@ -62,7 +64,7 @@ def create_agent_executor(supabase: Client, user_id: str):  # 👈 1. 파라미�
     logger.info(f"🔧 Creating Agent Executor for user: {user_id}")
     
     
-    chat_history = load_chat_history_from_db(supabase, user_id, limit=6)
+    chat_history = load_chat_history_from_db(supabase, user_id)
     chat_history_text = chat_history[0] if chat_history else ""
  
     # Create optimized prompt template # ✅ check
