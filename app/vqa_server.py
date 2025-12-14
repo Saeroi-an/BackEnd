@@ -27,7 +27,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 async def load_vqa_model():
     """서버 시작 시 Qwen2VL 모델을 메모리에 로드"""
     global model, processor
-    model_name = "Rfy23/qwen2vl-ko-zh"
+    model_name = "Rfy23/qwenvl-7B-medical-ko-zh"
     
     print("🚀 Qwen2VL 모델 로드 시작...")
     try:
