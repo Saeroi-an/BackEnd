@@ -1,3 +1,4 @@
+import gc
 import torch
 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
 from qwen_vl_utils import process_vision_info # 실제 사용 시 임포트 필요
@@ -104,6 +105,12 @@ async def vqa_inference_endpoint(input_data: VQAInput):
         print("모델 출력:")
         
         inference_result = f"처방 ID {input_data.prescription_id}에 대한 추론 출력: \n {output_text[0]}"
+        
+        # GPU 메모리 즉시 정리
+        del generated_ids, generated_ids_trimmed, inputs, image_inputs
+        torch.cuda.empty_cache()
+        gc.collect()
+        print(f"✅ GPU 메모리 정리 완료 (prescription_id: {input_data.prescription_id})")
         
         return {"prescription_id": input_data.prescription_id, "inference_result": inference_result}
         
