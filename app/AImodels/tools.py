@@ -1,5 +1,5 @@
 # app/AImodels/tools.py
-from langchain.tools import BaseTool, Tool
+from langchain.tools import BaseTool, tool, Tool
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.services.drug_service import get_drug_info
@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 # [A] 사용자 정의 Tool 함수
 
+@tool
 def run_vl_model_inference(image_identifier: str) -> str:
     """
     VL 모델 추론 함수 (VQA API 호출 방식)
@@ -123,7 +124,7 @@ def run_vl_model_inference(image_identifier: str) -> str:
         logger.error(f"VL Tool 실행 오류: {e}")
         return f"처방전 분석 중 오류가 발생했습니다: {str(e)}"
 
-
+@tool
 def call_public_data_api(search_query: str) -> str:
     """
     공공데이터포털 API 호출 함수 (식약처 약물 정보)
@@ -179,30 +180,34 @@ api_tool = Tool(
     )
 )
 
-# [C] 전역 Tool 리스트 (agent_factory.py에서 사용)
-ALL_TOOLS: List[Tool] = [vl_tool, api_tool]
-
-# [D] 기존 BaseTool 방식도 유지 (호환성)
-class DrugSearchInput(BaseModel):
-    """약물 검색을 위한 입력 스키마"""
-    drug_name: str = Field(description="검색할 약물의 이름")
-
-
-class DrugInfoTool(BaseTool):
-    """식약처 API를 호출하여 약물 정보를 검색하는 Tool (기존 코드)"""
-    
-    name: str = "drug_information_search"
-    description: str = (
-        "약물 이름에 대한 자세한 정보를 찾을 때 사용합니다. "
-        "효능, 사용법, 부작용, 주의사항 등을 제공합니다."
+multiply_tool = Tool(
+    name = "multiply_tool",
+    func = multiply,
+    description = (
+        "사용자가  두개의 숫자를 주고 '곱하라'라고 입력이 들어올 때, 이 함수를 이용합니다."
     )
-    args_schema: type[BaseModel] = DrugSearchInput
-    return_direct: bool = False
-    
-    def _run(self, drug_name: str) -> str:
-        """실제 Tool의 실행 로직"""
-        return call_public_data_api(drug_name)
-    
-    async def _arun(self, drug_name: str) -> str:
-        """비동기 실행 미지원"""
-        raise NotImplementedError("DrugInfoTool does not support async run")
+)
+
+add_tool = Tool(
+    name = "add_tool",
+    func = add,
+    description = (
+        "사용자가  두개의 숫자를 주고 '더하라'라고 입력이 들어올 때, 이 함수를 이용합니다."
+    )
+)
+
+
+@tool
+def multiply(x: float, y: float) -> float:
+    """Multiply 'x' times 'y'."""
+    return x * y
+
+@tool
+def add(x: float, y: float) -> float:
+    """Add 'x' and 'y'."""
+    return x + y
+
+
+
+# [C] 전역 Tool 리스트 (agent_factory.py에서 사용)
+ALL_TOOLS: List[Tool] = [vl_tool, api_tool, multiply_tool, add_tool]

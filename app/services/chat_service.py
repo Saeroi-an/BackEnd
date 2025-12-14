@@ -9,6 +9,8 @@ from app.AImodels.agent_factory import create_agent_executor
 # from langchain.memory import ConversationBufferMemory
 # from langchain.schema import HumanMessage, AIMessage
 import logging
+# from app.AImodels.tools import ALL_TOOLS
+# from app.AImodels.agent_factory import (llm)
 
 logger = logging.getLogger(__name__)
 
@@ -84,13 +86,13 @@ def process_chat_with_db(
         chat_history_text = load_chat_history_from_db(supabase, user_id, limit=25)[0]
         
         # 2) 사용자 질문 보강(enhanced_query)
-        enhanced_query = user_query
-        if prescription_analysis:
-            enhanced_query = f"""처방전 분석 결과:
-{prescription_analysis}
-사용자 질문: {user_query}
-위 처방전 정보를 참고하여 답변해주세요.
-"""
+#        enhanced_query = user_query
+#         if prescription_analysis:
+#             enhanced_query = f"""처방전 분석 결과:
+# {prescription_analysis}
+# 사용자 질문: {user_query}
+# 위 처방전 정보를 참고하여 답변해주세요.
+# """
         
         logger.info(f"💬 Processing query for user: {user_id}")
         
@@ -101,13 +103,13 @@ def process_chat_with_db(
         # 4) invoke() 실행 (여기서 실제 LLM 호출/툴 호출이 일어남)
         # ✅ 수정: "input" → "user_query" (agent_factory.py의 프롬프트와 일치)
         result = executor.invoke({
-            "user_query": enhanced_query,      # ← 수정됨
+            "input": user_query,      # ← 수정됨
             "chat_history": chat_history_text
         })
         
         # 5) 결과에서 "output"만 뽑아 문자열로 반환
         ai_response = result.get("output", "응답을 생성할 수 없습니다.")
-        
+        logger.info(f"ai response 상황!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: {ai_response}")
         logger.info("🤖 AI response generated")
         
         return ai_response

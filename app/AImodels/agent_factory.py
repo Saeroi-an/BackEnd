@@ -6,7 +6,7 @@ from supabase import Client
 # LangChain 최신 버전(1.x)에서는 기존의 에이전트 구현(AgentExecutor, ReAct agent 등)이
 # 'langchain' 본 패키지에서 분리되어 'langchain-classic' 패키지로 이동한 경우가 많음.
 # 기존 코드(레거시 ReAct 에이전트)를 유지하려면 classic에서 가져오는 게 안정적.
-from langchain_classic.agents import AgentExecutor
+from langchain_classic.agents import AgentExecutor, create_openai_tools_agent
 # ↑ AgentExecutor: "Agent(추론 로직) + Tools(도구)"를 묶어서 실행(invoke)할 수 있게 해주는 실행기
 try:
     from langchain_classic.agents import create_react_agent
@@ -17,8 +17,10 @@ except ImportError:
 from langchain_openai import ChatOpenAI
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain.tools import Tool
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from app.AImodels.tools import ALL_TOOLS
+from app.services.chat_service import load_chat_history_from_db
+
 
 logger = logging.getLogger(__name__)
 
@@ -66,17 +68,15 @@ def create_agent_executor(supabase: Client, user_id: str):  # 👈 1. 파라미�
     
     logger.info(f"🔧 Creating Agent Executor for user: {user_id}")
     
-    # 👇 2. Supabase에서 채팅 기록 조회: 채팅 기록 직접 조회
-    from app.services.chat_service import load_chat_history_from_db
     
     chat_history = load_chat_history_from_db(supabase, user_id, limit=6)
     chat_history_text = chat_history[0] if chat_history else ""
  
     # Create optimized prompt template # ✅ check
-    react_prompt = PromptTemplate.from_template("""You are a helpful medical assistant. Answer questions based on the tools available and conversation history.
-
-Available tools:
-{ALL_TOOLS}
+    react_prompt = ChatPromptTemplate.from_message([
+        ("system", """
+        Available tools:
+{tools}
 
 Tool Names: {tool_names}
 
@@ -97,14 +97,45 @@ Final Answer: the complete answer to the question
 
 Begin!
 
-Previous conversation:
-{chat_history}
 
-Question: {user_query}""")
+    """
+         ),
+        ("human", "{input}"),
+        ("placeholder", "{agent_scratchpad}")
+    ])
+
+#     react_prompt = PromptTemplate.from_template("""You are a helpful medical assistant. Answer questions based on the tools available and conversation history.
+
+# Available tools:
+# {tools}
+
+# Tool Names: {tool_names}
+
+# Guidelines:
+# - If the question contains "prescription_id: [number]", use VL_Model_Image_Analyzer with that number as input 
+# - For drug information questions, use Public_Data_API_Searcher
+# - Otherwise, answer based on your knowledge
+
+# Use this format:
+# Question: the input question
+# Thought: think about what to do
+# Action: the tool to use (one of [{tool_names}]) OR say "No tool needed"
+# Action Input: the input for the tool (if using a tool)
+# Observation: the tool's response
+# ... (repeat Thought/Action/Observation if needed)
+# Thought: I now know the final answer
+# Final Answer: the complete answer to the question
+
+# Begin!
+
+# Previous conversation:
+# {chat_history}
+
+# Question: {user_query}""")
     
     
     
-    agent = create_react_agent(
+    agent = create_openai_tools_agent(
         llm=GLOBAL_LLM,
         tools=GLOBAL_TOOLS,
         prompt=react_prompt
