@@ -69,7 +69,7 @@ def run_vl_model_inference(image_identifier: str) -> str:
                     "prescription_id": prescription_id
                 },
                 headers={"Content-Type": "application/json"},
-                timeout=60  # 60초 타임아웃 (VL 모델 추론 시간 고려)
+                timeout=300  # 60초 타임아웃 (VL 모델 추론 시간 고려)
             )
             
             if not response.ok:
