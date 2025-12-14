@@ -16,7 +16,7 @@ except ImportError:
     from langchain_classic.agents.react.agent import create_react_agent
 from langchain_openai import ChatOpenAI
 from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain.tools import Tool
+from langchain.tools import tool
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from app.AImodels.tools import ALL_TOOLS
 from app.services.chat_service import load_chat_history_from_db
