@@ -70,7 +70,7 @@ def create_agent_executor(supabase: Client, user_id: str):
     chat_history_text = chat_history[0] if chat_history else ""
  
     # Create optimized prompt template # ✅ check
-    react_prompt = ChatPromptTemplate.from_message([
+    react_prompt = ChatPromptTemplate.from_messages([
         ("system", """
         Available tools:
 {tools}
