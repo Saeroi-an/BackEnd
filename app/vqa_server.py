@@ -56,6 +56,9 @@ async def vqa_inference_endpoint(input_data: VQAInput):
     # LangChain Tool에서 받은 인수를 사용합니다.
     image_url = input_data.image_path
     question = input_data.question
+
+    # 요청 로깅
+    print(f"📥 받은 질문: {question}")
     
     # **여기에 사용자님의 Qwen2VL 추론 로직을 넣습니다.**
     # (messages, processor.apply_chat_template, process_vision_info, model.generate 코드)
