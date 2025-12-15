@@ -2,6 +2,7 @@
 import requests
 from typing import Optional, Dict, Any
 import logging
+from difflib import SequenceMatcher
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -81,22 +82,45 @@ def get_drug_info(drug_name: str) -> Dict[str, Any]:
         }
 
 
+def similarity_ratio(str1: str, str2: str) -> float:
+    """두 문자열의 유사도 계산 (0.0 ~ 1.0)"""
+    return SequenceMatcher(None, str1.lower(), str2.lower()).ratio()
+
 def find_exact_match(items: list, drug_name: str) -> Optional[Dict]:
     """
-    검색 결과에서 약품명이 정확히 일치하는 항목 찾기
+    검색 결과에서 약품명이 일치하는 항목 찾기 (유사도 검색 포함)
     
     Args:
         items: API 응답 아이템 리스트
         drug_name: 검색한 약품명
         
     Returns:
-        정확히 일치하는 아이템 또는 None
+        가장 유사한 아이템 또는 None
     """
-    drug_name_lower = drug_name.lower().strip()
+    drug_name_clean = drug_name.lower().strip().replace(" ", "")
     
+    # 1단계: 정확한 일치 찾기
     for item in items:
-        item_name = item.get("itemName", "").lower().strip()
-        if drug_name_lower in item_name or item_name in drug_name_lower:
+        item_name = item.get("itemName", "").lower().strip().replace(" ", "")
+        if drug_name_clean in item_name or item_name in drug_name_clean:
+            logger.info(f"✅ 정확한 일치: {item.get('itemName')}")
             return item
     
+    # 2단계: 유사도 기반 검색 (80% 이상 유사)
+    best_match = None
+    best_ratio = 0.0
+    
+    for item in items:
+        item_name = item.get("itemName", "").replace(" ", "")
+        ratio = similarity_ratio(drug_name_clean, item_name)
+        
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_match = item
+    
+    if best_ratio >= 0.8:  # 80% 이상 유사하면 매칭
+        logger.info(f"✅ 유사 매칭 ({best_ratio:.1%}): {best_match.get('itemName')}")
+        return best_match
+    
+    logger.warning(f"⚠️ 유사한 약품 없음 (최고 유사도: {best_ratio:.1%})")
     return None
