@@ -65,7 +65,7 @@ def run_vl_model_inference(image_identifier: str) -> str:
                 vqa_api_url,
                 json={
                     "image_path": file_url,
-                    "question": "这张处方上写了什么？ 尤其是药品、服用次数等，请准确全部告诉我。",
+                    "question": "请读取处方上的韩文药品名称（保持韩文原样），然后用中文说明服用方法、次数、期限等信息。",
                     "prescription_id": prescription_id
                 },
                 headers={"Content-Type": "application/json"},
