@@ -124,3 +124,6 @@ async def vqa_inference_endpoint(input_data: VQAInput):
         raise HTTPException(status_code=500, detail=f"VQA 추론 중 오류 발생: {e}")
 
 # 서버 실행 명령어: uvicorn main:app --reload --port 8000
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)
