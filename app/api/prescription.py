@@ -63,7 +63,7 @@ async def upload_prescription(
             
             # 1-4. 기본 프롬프트 설정
             if not query or query.strip() == "":
-                user_message = "这张处方上写了什么？"
+                user_message = "请读取处方上的韩文药品名称（保持韩文原样），然后用中文说明服用方法、次数、期限等信息。"
                 logger.info("📝 Using default prompt (image only)")
             
             logger.info(f"🖼️ Image uploaded: prescription_id={prescription_id}")
