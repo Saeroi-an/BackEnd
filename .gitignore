@@ -34,6 +34,11 @@ test_db.py
 test_db2.py
 test_db3.py
 langchain_agent.py
+langchain_test.py
+langchain_test.ts
+openai_ping.py
+hello.py
+tsconfig.json
 
 # Python cache
 __pycache__/
@@ -43,7 +48,14 @@ __pycache__/
 
 # Node
 node_modules/
+package.json
 package-lock.json
 
 # Python virtual environments (기존 내용에 추가)
 BE-venv/
+
+# 불필요한 파일
+auth_router.py
+vqa_inference.py
+ai_router.py
+api_router.py
