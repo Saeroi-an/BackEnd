@@ -33,13 +33,13 @@ build/
 test_db.py
 test_db2.py
 test_db3.py
+test_upload.py
 langchain_agent.py
 langchain_test.py
 langchain_test.ts
 openai_ping.py
 hello.py
 tsconfig.json
-test_upload.py
 
 # Python cache
 __pycache__/
@@ -57,7 +57,7 @@ tsconfig.json
 BE-venv/
 
 # 불필요한 파일
-auth_router.py
-vqa_inference.py
-ai_router.py
-api_router.py
+app/api/auth_router.py
+app/api/vqa_inference.py
+app/api/ai_router.py
+app/api/api_router.py
