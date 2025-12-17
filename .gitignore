@@ -39,6 +39,7 @@ langchain_test.ts
 openai_ping.py
 hello.py
 tsconfig.json
+test_upload.py
 
 # Python cache
 __pycache__/
@@ -50,6 +51,7 @@ __pycache__/
 node_modules/
 package.json
 package-lock.json
+tsconfig.json
 
 # Python virtual environments (기존 내용에 추가)
 BE-venv/
