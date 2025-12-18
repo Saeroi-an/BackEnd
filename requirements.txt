@@ -19,7 +19,6 @@ opencv-python==4.11.0.86
 Pillow==11.3.0
 accelerate==1.10.1
 numpy==2.1.2
->>>>>>> f4226fdfb53e92d58b08af3fcf9fba2f3f24bca7
 
 # Database
 sqlalchemy==2.0.36
